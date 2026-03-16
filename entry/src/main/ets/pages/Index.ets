@@ -1,6 +1,7 @@
 import common from '@ohos.app.ability.common'
 import { readToken, saveToken } from '../api/AuthStorage'
 import { sendSmsCode, smsLogin } from '../api/AuthApi'
+import { CourseListPage } from './CourseListPage'
 import { HomePage } from './HomePage'
 import { LoginPage } from './LoginPage'
 import { ProfilePage } from './ProfilePage'
@@ -14,19 +15,25 @@ struct Index {
   @State currentTab: number = 0
   @State phoneNumber: string = ''
   @State verificationCode: string = ''
-  @State loginTip: string = 'Enter your phone number and request an SMS code.'
+  @State loginTip: string = '请输入手机号并获取验证码。'
   @State codeCountdown: number = 0
   @State isSendingCode: boolean = false
   @State isLoggingIn: boolean = false
   @State dailyProgress: number = 40
-  @State selectedPhrase: string = 'Hello'
-  @State selectedFilter: string = 'Week'
-  @State selectedGoal: string = 'Daily communication'
-  @State selectedTheme: string = 'Ocean'
+  @State avatarUrl: string = 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&q=80'
+  @State selectedCourseName: string = '日常问候入门'
+  @State selectedPhrase: string = '你好'
+  @State selectedCourseCode: string = 'COURSE-101'
+  @State currentTrainingType: string = 'gesture'
+  @State trainView: string = 'courseList'
+  @State selectedFilter: string = '周'
+  @State selectedGoal: string = '日常交流'
+  @State selectedTheme: string = '海盐蓝'
+  @State profileView: string = 'main'
   @State notificationsEnabled: boolean = true
   @State vibrationEnabled: boolean = false
 
-  private readonly smsApiBaseUrl: string = 'http://127.0.0.1:8501'
+  private readonly smsApiBaseUrl: string = 'http://10.133.132.87:8501'
   private countdownTimer: number = -1
 
   aboutToAppear() {
@@ -79,21 +86,21 @@ struct Index {
 
   private getErrorMessage(code: number, fallbackMessage: string): string {
     const errorMap: Record<number, string> = {
-      202: 'Incorrect verification code',
-      204: 'Data error',
-      205: 'Please enter a valid phone number',
-      206: 'Verification code expired, please request a new one',
-      207: 'Failed to send verification code, please try again later',
-      210: 'Requests are too frequent, please try again later',
-      214: 'Daily SMS limit reached',
-      216: 'Account disabled, please contact administrator'
+      202: '验证码错误',
+      204: '数据异常',
+      205: '请输入正确的手机号',
+      206: '验证码已过期，请重新获取',
+      207: '验证码发送失败，请稍后重试',
+      210: '请求过于频繁，请稍后再试',
+      214: '今日短信次数已达上限',
+      216: '账号已被禁用，请联系管理员'
     }
     return errorMap[code] ?? fallbackMessage
   }
 
   private async handleRequestCode() {
     if (this.phoneNumber.length !== 11) {
-      this.loginTip = 'Please enter a valid phone number'
+      this.loginTip = '请输入正确的手机号'
       return
     }
     if (this.isSendingCode || this.codeCountdown > 0) {
@@ -101,19 +108,19 @@ struct Index {
     }
 
     this.isSendingCode = true
-    this.loginTip = 'Sending verification code...'
+    this.loginTip = '正在发送验证码...'
 
     try {
       const result = await sendSmsCode(this.smsApiBaseUrl, this.phoneNumber)
       this.loginTip = result.ok
-        ? 'Verification code sent successfully'
-        : this.getErrorMessage(result.code, result.message || 'Failed to send verification code')
+        ? '验证码发送成功'
+        : this.getErrorMessage(result.code, result.message || '验证码发送失败')
 
       if (result.ok) {
         this.startCountdown()
       }
     } catch (error) {
-      this.loginTip = `Failed to send verification code: ${JSON.stringify(error)}`
+      this.loginTip = `验证码发送失败：${JSON.stringify(error)}`
     } finally {
       this.isSendingCode = false
     }
@@ -121,11 +128,11 @@ struct Index {
 
   private async handleLogin() {
     if (this.phoneNumber.length !== 11) {
-      this.loginTip = 'Please enter a valid phone number'
+      this.loginTip = '请输入正确的手机号'
       return
     }
     if (this.verificationCode.length === 0) {
-      this.loginTip = 'Please enter the verification code'
+      this.loginTip = '请输入验证码'
       return
     }
     if (this.isLoggingIn) {
@@ -133,25 +140,33 @@ struct Index {
     }
 
     this.isLoggingIn = true
-    this.loginTip = 'Logging in...'
+    this.loginTip = '正在登录...'
 
     try {
       const result = await smsLogin(this.smsApiBaseUrl, this.phoneNumber, this.verificationCode)
       if (!result.ok || !result.data?.token) {
-        this.loginTip = this.getErrorMessage(result.code, result.message || 'Login failed')
+        this.loginTip = this.getErrorMessage(result.code, result.message || '登录失败')
         return
       }
 
       await saveToken(this.getAbilityContext(), result.data.token)
-      this.loginTip = 'Login successful'
+      this.loginTip = '登录成功'
       this.isLoggedIn = true
       this.currentTab = 0
       this.clearCountdownTimer()
     } catch (error) {
-      this.loginTip = `Login failed: ${JSON.stringify(error)}`
+      this.loginTip = `登录失败：${JSON.stringify(error)}`
     } finally {
       this.isLoggingIn = false
     }
+  }
+
+  private handleSkipLogin() {
+    this.loginTip = '已跳过登录，当前为本地调试模式。'
+    this.isLoggedIn = true
+    this.currentTab = 0
+    this.profileView = 'main'
+    this.clearCountdownTimer()
   }
 
   @Builder
@@ -159,58 +174,95 @@ struct Index {
     Row() {
       Column({ space: 4 }) {
         Text('HearBridge')
-          .fontSize(24)
+          .fontSize(22)
           .fontWeight(FontWeight.Bold)
-          .fontColor('#203040')
+          .fontColor('#2E79F4')
 
-        Text('Page-based structure with separated API files')
+        Text('科学训练，轻量陪伴')
           .fontSize(12)
-          .fontColor('#6C7B8A')
+          .fontColor('#7A8CA7')
       }
       .alignItems(HorizontalAlign.Start)
 
       Blank()
 
-      Text(this.selectedTheme)
-        .fontSize(12)
-        .fontColor('#246BFD')
-        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-        .backgroundColor('#EAF2FA')
-        .borderRadius(14)
+      Stack({ alignContent: Alignment.Center }) {
+        Row() {
+        }
+        .width(32)
+        .height(32)
+        .backgroundColor('#F3F7FF')
+        .borderRadius(16)
+        .border({ width: 1, color: '#DDE8F8' })
+        .shadow({ radius: 10, color: '#2E79F414', offsetX: 0, offsetY: 4 })
+
+        SymbolGlyph($r('sys.symbol.ellipsis_message'))
+          .fontSize(18)
+          .fontColor(['#4C79C9'])
+      }
+      .width(32)
+      .height(32)
     }
     .width('100%')
-    .padding({ left: 20, right: 20, top: 18, bottom: 8 })
+    .padding({ left: 18, right: 18, top: 0, bottom: 8 })
   }
 
   @Builder
   private buildBottomNav() {
-    Row() {
-      this.buildNavItem(0, 'Home')
-      this.buildNavItem(1, 'Train')
-      this.buildNavItem(2, 'Record')
-      this.buildNavItem(3, 'Profile')
+    Column() {
+      Row() {
+        this.buildNavItem(0, '首页', $r('sys.symbol.house'), $r('sys.symbol.house_fill'))
+        this.buildNavItem(1, '训练', $r('sys.symbol.fast'), $r('sys.symbol.fast_fill'))
+        this.buildNavItem(2, '记录', $r('sys.symbol.square_grid_2x2'), $r('sys.symbol.square_fill_grid_2x2'))
+        this.buildNavItem(3, '我的', $r('sys.symbol.person'), $r('sys.symbol.person_fill'))
+      }
+      .width('100%')
+      .padding({ left: 12, right: 12, top: 8, bottom: 4 })
+
+      Blank()
+        .height(12)
     }
     .width('100%')
-    .padding({ left: 12, right: 12, top: 10, bottom: 18 })
-    .backgroundColor('#FFFFFF')
-    .borderRadius({ topLeft: 24, topRight: 24 })
+    .backgroundColor('#FFFFFFF2')
+    .backgroundBlurStyle(BlurStyle.COMPONENT_ULTRA_THICK)
+    .borderRadius({ topLeft: 26, topRight: 26 })
+    .shadow({ radius: 24, color: '#15304B1A', offsetX: 0, offsetY: -4 })
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 
   @Builder
-  private buildNavItem(index: number, label: string) {
+  private buildNavItem(index: number, label: string, icon: Resource, selectedIcon: Resource) {
     Column({ space: 6 }) {
-      Text(this.currentTab === index ? 'o' : '.')
-        .fontSize(16)
-        .fontColor(this.currentTab === index ? '#246BFD' : '#9AA8B5')
+      Stack({ alignContent: Alignment.Center }) {
+        Row() {
+        }
+        .width(32)
+        .height(32)
+        .backgroundColor(this.currentTab === index ? '#E7F0FF' : '#F4F7FB')
+        .borderRadius(16)
+
+        SymbolGlyph(this.currentTab === index ? selectedIcon : icon)
+          .fontSize(18)
+          .fontColor(this.currentTab === index ? ['#2E79F4'] : ['#97A7C0'])
+          .symbolEffect(new BounceSymbolEffect(EffectScope.WHOLE, EffectDirection.UP), this.currentTab === index)
+      }
+      .width(32)
+      .height(32)
 
       Text(label)
         .fontSize(11)
-        .fontColor(this.currentTab === index ? '#246BFD' : '#7A8794')
+        .fontColor(this.currentTab === index ? '#2E79F4' : '#7A8CA7')
     }
     .layoutWeight(1)
-    .padding({ top: 4, bottom: 4 })
+    .padding({ top: 2, bottom: 2 })
     .onClick(() => {
       this.currentTab = index
+      if (index === 1) {
+        this.trainView = 'courseList'
+      }
+      if (index !== 3) {
+        this.profileView = 'main'
+      }
     })
   }
 
@@ -219,22 +271,56 @@ struct Index {
     if (this.currentTab === 0) {
       HomePage({
         dailyProgress: this.dailyProgress,
-        onOpenTraining: () => {
+        avatarUrl: this.avatarUrl,
+        onOpenGestureCourses: () => {
+          this.selectedCourseCode = 'COURSE-101'
+          this.selectedCourseName = '日常问候入门'
+          this.currentTrainingType = 'gesture'
+          this.trainView = 'courseList'
+          this.currentTab = 1
+        },
+        onOpenSpeechCourses: () => {
+          this.selectedCourseCode = 'COURSE-301'
+          this.selectedCourseName = '声母训练入门'
+          this.currentTrainingType = 'speech'
+          this.trainView = 'courseList'
           this.currentTab = 1
         }
       })
     } else if (this.currentTab === 1) {
-      TrainPage({
-        selectedPhrase: this.selectedPhrase,
-        onSelectPhrase: (phrase: string) => {
-          this.selectedPhrase = phrase
-        },
-        onCompleteTraining: () => {
-          if (this.dailyProgress < 100) {
-            this.dailyProgress = Math.min(100, this.dailyProgress + 10)
+      if (this.trainView === 'courseList') {
+        CourseListPage({
+          trainingType: this.currentTrainingType,
+          onTrainingTypeChange: (trainingType: string) => {
+            this.currentTrainingType = trainingType
+          },
+          onOpenCourse: (courseName: string, courseCode: string) => {
+            this.selectedCourseName = courseName
+            this.selectedCourseCode = courseCode
+            this.selectedPhrase = this.currentTrainingType === 'speech' ? '阿' : '你好'
+            this.selectedPhrase = courseCode === 'COURSE-301' ? '浣犲ソ' : this.selectedPhrase
+            this.trainView = 'detail'
           }
-        }
-      })
+        })
+      } else {
+        TrainPage({
+          courseName: this.selectedCourseName,
+          courseCode: this.selectedCourseCode,
+          trainingType: this.currentTrainingType,
+          selectedPhrase: this.selectedPhrase,
+          onSelectPhrase: (phrase: string) => {
+            this.selectedPhrase = phrase
+          },
+          onBackToCourseList: () => {
+            this.trainView = 'courseList'
+          },
+          onCompleteTraining: () => {
+            if (this.dailyProgress < 100) {
+              this.dailyProgress = Math.min(100, this.dailyProgress + 10)
+            }
+          }
+        })
+      }
     } else if (this.currentTab === 2) {
       RecordPage({
         dailyProgress: this.dailyProgress,
@@ -243,15 +329,30 @@ struct Index {
           this.selectedFilter = filter
         },
         onOpenTraining: () => {
+          this.trainView = 'courseList'
           this.currentTab = 1
         }
       })
     } else {
       ProfilePage({
+        currentView: this.profileView,
+        avatarUrl: $avatarUrl,
         selectedGoal: this.selectedGoal,
         selectedTheme: this.selectedTheme,
         notificationsEnabled: this.notificationsEnabled,
         vibrationEnabled: this.vibrationEnabled,
+        onOpenSettings: () => {
+          this.profileView = 'settings'
+        },
+        onCloseSettings: () => {
+          this.profileView = 'main'
+        },
+        onOpenAccountSecurity: () => {
+          this.profileView = 'accountSecurity'
+        },
+        onBackToSettings: () => {
+          this.profileView = 'settings'
+        },
         onGoalChange: (goal: string) => {
           this.selectedGoal = goal
         },
@@ -289,24 +390,43 @@ struct Index {
         },
         onLogin: () => {
           this.handleLogin()
+        },
+        onSkipLogin: () => {
+          this.handleSkipLogin()
         }
       })
     } else {
-      Stack({ alignContent: Alignment.Bottom }) {
-        Scroll() {
-          Column({ space: 8 }) {
-            this.buildTopBar()
+      Column() {
+        if (!(this.currentTab === 1 && this.trainView === 'detail')) {
+          this.buildTopBar()
+        }
+
+        if (this.currentTab === 1 && this.trainView === 'detail') {
+          Column() {
             this.buildCurrentPage()
           }
           .width('100%')
+          .layoutWeight(1)
+        } else {
+          Scroll() {
+            Column() {
+              this.buildCurrentPage()
+            }
+            .width('100%')
+          }
+          .layoutWeight(1)
+          .scrollBar(BarState.Off)
         }
-        .scrollBar(BarState.Off)
 
         this.buildBottomNav()
       }
       .width('100%')
       .height('100%')
-      .backgroundColor('#EAF2FA')
+      .linearGradient({
+        angle: 180,
+        colors: [['#F7FAFE', 0], ['#EEF4FB', 1]]
+      })
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
   }
 }
