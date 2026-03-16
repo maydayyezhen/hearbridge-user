@@ -648,9 +648,9 @@ export struct TrainPage {
         this.buildStageStepper()
       }
       .width('100%')
-      .padding({ left: 16, right: 16, top: 6, bottom: 10 })
-      .backgroundColor('#F7FAFEF2')
-      .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
+      .padding({ left: 16, right: 16, top: 0, bottom: 10 })
+      .backgroundColor('#FFFFFF')
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
     }
     .width('100%')
     .height('100%')
@@ -990,38 +990,24 @@ export struct TrainPage {
         Column() {
         }
         .width('100%')
-        .height(342)
+        .height(412)
         .backgroundColor('#FFFFFF')
         .borderRadius(26)
 
         Column() {
         }
-        .width(210)
-        .height(210)
-        .borderRadius(105)
-        .border({
-          width: 1,
-          color: '#E6EEF9'
+        .width('100%')
+        .height(118)
+        .linearGradient({
+          angle: 180,
+          colors: [['#F7FAFF', 0], ['#FFFFFF', 1]]
         })
-        .position({ x: 198, y: -68 })
-        .opacity(0.7)
-
-        Column() {
-        }
-        .width(124)
-        .height(124)
-        .borderRadius(62)
-        .border({
-          width: 1,
-          color: '#EEF3FA'
-        })
-        .position({ x: -22, y: 228 })
-        .opacity(0.8)
+        .borderRadius({ topLeft: 26, topRight: 26, bottomLeft: 0, bottomRight: 0 })
 
         Column() {
         }
         .width('100%')
-        .height(342)
+        .height(412)
         .backgroundColor('#FFFFFF')
         .borderRadius(26)
         .opacity(0.02)
@@ -1055,7 +1041,7 @@ export struct TrainPage {
             .borderRadius(77)
             .border({
               width: 10,
-              color: '#DCE6F5'
+              color: '#C8DEFF'
             })
             .shadow({ radius: 8, color: '#FFFFFFCC', offsetX: 0, offsetY: 0 })
 
@@ -1083,20 +1069,36 @@ export struct TrainPage {
             .fontColor('#1F2A44')
             .textAlign(TextAlign.Center)
 
-          Row({ space: 8 }) {
-            this.buildResultBadge('完成度高', '#EEF5FF', '#2E79F4')
-            this.buildResultBadge('节奏准确', '#EEF5FF', '#2E79F4')
-            this.buildResultBadge('尾音待加强', '#EEF3FA', '#4E6F9F')
+          Text('系统根据本轮动作完成度、节奏稳定性与发音表现综合生成本次训练反馈。')
+            .width('100%')
+            .fontSize(12)
+            .fontColor('#7D8CA2')
+            .lineHeight(18)
+            .textAlign(TextAlign.Center)
+
+          Column() {
           }
           .width('100%')
-          .justifyContent(FlexAlign.Center)
+          .height(1)
+          .backgroundColor('#EDF2F8')
+
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Center, alignItems: ItemAlign.Start }) {
+            this.buildResultBadge('完成度高', '#EEF5FF', '#2E79F4')
+            this.buildResultBadge('节奏准确', '#EEF5FF', '#2E79F4')
+            this.buildResultBadge('尾音待加强', '#FFF1F1', '#D94C4C')
+          }
+          .width('100%')
         }
         .width('100%')
         .padding(22)
       }
       .width('100%')
-      .height(342)
+      .height(412)
       .shadow({ radius: 20, color: '#15304B14', offsetX: 0, offsetY: 10 })
+      .border({
+        width: 1,
+        color: '#E8EEF7'
+      })
 
       Column({ space: 14 }) {
         Text('维度分析')
@@ -1114,6 +1116,10 @@ export struct TrainPage {
       .backgroundColor('#F8FAFD')
       .borderRadius(20)
       .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
+      .border({
+        width: 1,
+        color: '#E8EEF7'
+      })
 
       this.buildFeedbackModule(
         '本次亮点',
@@ -1127,8 +1133,8 @@ export struct TrainPage {
         '建议改进',
         ['尾音控制不足'],
         '建议下一轮训练中放慢尾音收束速度，注意口型闭合时机，让结尾更清晰稳定。',
-        '#EEF3FA',
-        '#4E6F9F'
+        '#FFF1F1',
+        '#D94C4C'
       )
 
       this.buildRecentTrendCard()
@@ -1289,6 +1295,7 @@ export struct TrainPage {
       width: 1,
       color: '#E3ECF8'
     })
+    .shadow({ radius: 6, color: '#FFFFFFD8', offsetX: 0, offsetY: 0 })
   }
 
   @Builder
@@ -1297,9 +1304,14 @@ export struct TrainPage {
       .fontSize(12)
       .fontWeight(FontWeight.Medium)
       .fontColor(fontColor)
-      .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+      .padding({ left: 12, right: 12, top: 9, bottom: 9 })
       .backgroundColor(backgroundColor)
       .borderRadius(14)
+      .border({
+        width: 1,
+        color: backgroundColor === '#FFF1F1' ? '#F1D7D7' : '#DDE9F8'
+      })
+      .margin({ right: 8, bottom: 8 })
   }
 
   @Builder
@@ -1355,16 +1367,12 @@ export struct TrainPage {
       }
       .width('100%')
 
-      Row({ space: 0 }) {
-        this.buildTrendPoint('1', 74, true)
-        this.buildTrendConnector()
-        this.buildTrendPoint('2', 79, false)
-        this.buildTrendConnector()
-        this.buildTrendPoint('3', 83, false)
-        this.buildTrendConnector()
-        this.buildTrendPoint('4', 87, false)
-        this.buildTrendConnector()
-        this.buildTrendPoint('5', 91, false)
+      Row({ space: 10 }) {
+        this.buildTrendBar('1', 74, false)
+        this.buildTrendBar('2', 79, false)
+        this.buildTrendBar('3', 83, false)
+        this.buildTrendBar('4', 87, false)
+        this.buildTrendBar('5', 91, true)
       }
       .width('100%')
       .alignItems(VerticalAlign.Bottom)
@@ -1383,41 +1391,48 @@ export struct TrainPage {
   }
 
   @Builder
-  private buildTrendConnector() {
-    Column() {
-    }
-    .width(18)
-    .height(2)
-    .backgroundColor('#C8D9EE')
-    .margin({ bottom: 46 })
-  }
-
-  @Builder
-  private buildTrendPoint(label: string, score: number, highlighted: boolean) {
+  private buildTrendBar(label: string, score: number, highlighted: boolean) {
     Column({ space: 8 }) {
       Text(`${score}`)
-        .fontSize(12)
+        .fontSize(11)
         .fontWeight(highlighted ? FontWeight.Bold : FontWeight.Medium)
         .fontColor(highlighted ? '#2E79F4' : '#6C7C95')
 
-      Column() {
+      Stack({ alignContent: Alignment.Bottom }) {
+        Column() {
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#F7FAFD')
+        .borderRadius(12)
+
+        Column() {
+        }
+        .width('100%')
+        .height(`${score}%`)
+        .linearGradient({
+          angle: 180,
+          colors: highlighted ? [['#6EA8FF', 0], ['#2E79F4', 1]] : [['#C9D8EB', 0], ['#AFC3DA', 1]]
+        })
+        .borderRadius({ topLeft: 8, topRight: 8, bottomLeft: 8, bottomRight: 8 })
       }
-      .width(10)
-      .height(10)
-      .backgroundColor(highlighted ? '#2E79F4' : '#B7CBE1')
-      .borderRadius(5)
+      .width('100%')
+      .layoutWeight(1)
+      .padding({ left: 6, right: 6, top: 8, bottom: 8 })
+      .backgroundColor(highlighted ? '#F4F8FF' : '#F8FAFD')
+      .borderRadius(14)
       .border({
-        width: 3,
-        color: highlighted ? '#E7F0FF' : '#EDF4FA'
+        width: 1,
+        color: highlighted ? '#D9E6F8' : '#E8EEF6'
       })
 
       Text(label)
         .fontSize(11)
         .fontColor('#8A99AD')
     }
-    .width(40)
+    .width(52)
+    .height(132)
     .alignItems(HorizontalAlign.Center)
-    .margin({ top: `${100 - score}%` })
   }
 
   @Builder
