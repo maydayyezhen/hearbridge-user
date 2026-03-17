@@ -1,68 +1,34 @@
 ﻿import photoAccessHelper from '@ohos.file.photoAccessHelper'
 import picker from '@ohos.file.picker'
+import { FALLBACK_COVER_URL, MediaResourceItem, TrainingItem, getMockTrainingItems } from './train/TrainData'
+import { ResultStageContent } from './train/stages/ResultStageContent'
+import { IntroStageContent } from './train/stages/IntroStageContent'
+import { GuideStageContent } from './train/stages/GuideStageContent'
+import { SummaryStageContent } from './train/stages/SummaryStageContent'
 
-class MediaResourceItem {
-  uid: string
-  name: string
-  url: string
-  status: string
-  title: string
-  description: string
+class CourseScoreEntry {
+  itemId: number
+  score: number
 
-  constructor(uid: string, name: string, url: string, status: string, title: string = '', description: string = '') {
-    this.uid = uid
-    this.name = name
-    this.url = url
-    this.status = status
-    this.title = title
-    this.description = description
+  constructor(itemId: number, score: number) {
+    this.itemId = itemId
+    this.score = score
   }
 }
 
-class TrainingItem {
-  id: number
-  name: string
-  code: string
-  majorCategoryCode: string
-  levelNum: number
-  isRecommended: boolean
-  sortNum: number
-  status: string
-  meaning: string
-  description: string
-  goal: string
-  precautions: string[]
-  commonErrors: string[]
-  cover: MediaResourceItem[]
-  video: MediaResourceItem[]
-  audio: MediaResourceItem[]
-  actionImages: MediaResourceItem[]
-  videoPoster: MediaResourceItem[]
+class CourseProgressSnapshot {
+  completedItemIds: number[]
+  scoreEntries: CourseScoreEntry[]
+  pausedAtItemName: string
 
-  constructor(id: number, name: string, code: string, majorCategoryCode: string, levelNum: number, isRecommended: boolean,
-    sortNum: number, status: string, meaning: string, description: string, goal: string, precautions: string[],
-    commonErrors: string[], cover: MediaResourceItem[], video: MediaResourceItem[], audio: MediaResourceItem[],
-    actionImages: MediaResourceItem[], videoPoster: MediaResourceItem[]) {
-    this.id = id
-    this.name = name
-    this.code = code
-    this.majorCategoryCode = majorCategoryCode
-    this.levelNum = levelNum
-    this.isRecommended = isRecommended
-    this.sortNum = sortNum
-    this.status = status
-    this.meaning = meaning
-    this.description = description
-    this.goal = goal
-    this.precautions = precautions
-    this.commonErrors = commonErrors
-    this.cover = cover
-    this.video = video
-    this.audio = audio
-    this.actionImages = actionImages
-    this.videoPoster = videoPoster
+  constructor(completedItemIds: number[], scoreEntries: CourseScoreEntry[], pausedAtItemName: string) {
+    this.completedItemIds = completedItemIds
+    this.scoreEntries = scoreEntries
+    this.pausedAtItemName = pausedAtItemName
   }
 }
+
+const COURSE_PROGRESS_CACHE: Map<string, CourseProgressSnapshot> = new Map()
 
 @Component
 export struct TrainPage {
@@ -86,6 +52,18 @@ export struct TrainPage {
   @State isDemoAudioPlaying: boolean = false
   @State demoAudioDurationSec: number = 9
   @State demoAudioWaveTick: number = 0
+  @State summaryCompletedCount: number = 0
+  @State summaryAverageScore: number = 0
+  @State summaryBestScore: number = 0
+  @State summaryMode: string = 'completed'
+  @State summaryPausedAtName: string = ''
+  @State showPauseDialog: boolean = false
+  @State showOutlinePanel: boolean = false
+  @State outlinePanelOffsetX: number = 360
+  @State favoriteItemIds: number[] = []
+  @State stageContentOpacity: number = 1
+  @State stageContentOffsetX: number = 0
+  @State isStageAnimating: boolean = false
   onSelectPhrase: (phrase: string) => void = () => {}
   onBackToCourseList: () => void = () => {}
   onCompleteTraining: () => void = () => {}
@@ -101,62 +79,11 @@ export struct TrainPage {
   private demoAudioTimer: number = -1
   private demoAudioStartAtMs: number = 0
   private scoringTimer: number = -1
-  private readonly fallbackCoverUrl: string = 'http://192.168.142.128:9001/hearbridge-bucket/20260316/3ad909fc0af94c58a8f2be4ca2fe4cbcChatGPT%20Image%202026%E5%B9%B43%E6%9C%8816%E6%97%A5%2001_25_49.png'
-  private readonly trainingItems: TrainingItem[] = [
-    new TrainingItem(
-      1, '你好', 'GESTURE_HELLO', 'gesture', 3, true, 10, 'published',
-      '用于日常问候场景。', '抬起右手，掌心朝外，轻微摆动。', '帮助学员完成基础问候表达。',
-      ['手掌方向朝外', '动作幅度自然'], ['手掌方向错误'],
-      [new MediaResourceItem('g-cover-1', 'cover-hello.png', 'https://placehold.co/400x240/png?text=Hello', 'done')],
-      [new MediaResourceItem('g-video-1', 'hello-demo.mp4', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', 'done')],
-      [],
-      [
-        new MediaResourceItem('g-step-1', 'hello-step-1.png', 'https://placehold.co/200x200/png?text=Hello+1', 'done', '抬手准备', '右手自然抬起，手臂不要僵硬，准备进入问候动作。'),
-        new MediaResourceItem('g-step-2', 'hello-step-2.png', 'https://placehold.co/200x200/png?text=Hello+2', 'done', '掌心朝外', '保持掌心朝外，轻微摆动，动作幅度自然即可。')
-      ],
-      []
-    ),
-    new TrainingItem(
-      3, '阿', 'VOICE_A', 'voice', 1, true, 10, 'published',
-      '用于学习基础元音发音。', '张口自然，保持声音平稳输出。', '帮助学员完成元音发音入门训练。',
-      ['口型自然张开', '发音时长稳定'], ['发音过短', '口型过紧'],
-      [new MediaResourceItem('v-cover-1', 'cover-voice-a.png', 'https://placehold.co/400x240/png?text=Voice+A', 'done')],
-      [new MediaResourceItem('v-video-1', 'voice-a-demo.mp4', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', 'done')],
-      [new MediaResourceItem('v-audio-1', 'voice-a.mp3', 'https://www.w3schools.com/html/horse.mp3', 'done')],
-      [
-        new MediaResourceItem('v-step-1', 'voice-a-mouth-1.png', 'https://placehold.co/200x200/png?text=Voice+A+1', 'done', '张口准备', '嘴巴自然张开，面部放松，不要刻意用力。'),
-        new MediaResourceItem('v-step-2', 'voice-a-mouth-2.png', 'https://placehold.co/200x200/png?text=Voice+A+2', 'done', '稳定发音', '保持口型稳定，均匀发出阿的声音。')
-      ],
-      []
-    ),
-    new TrainingItem(
-      6, '你好', 'VOI_001', 'voice', 1, true, 10, 'enabled',
-      '你好', '先看口型，再跟随视频完成模仿练习。', '帮助学员掌握“你好”的发音节奏。',
-      ['先看口型再发音', '保持语速平稳'], ['尾音不清晰'],
-      [new MediaResourceItem('v-cover-2', 'cover-voice-hello.png', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.png', 'done')],
-      [new MediaResourceItem('v-video-2', '%E4%BD%A0%E5%A5%BD.mp4', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/7375fc2d133c4ffdb11ed159fefd7a24%E4%BD%A0%E5%A5%BD.mp4', 'done')],
-      [new MediaResourceItem('v-audio-2', 'nihao.mp3', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.mp3', 'done')],
-      [
-        new MediaResourceItem(
-          'v-step-1',
-          'step-1.jpg',
-          'http://192.168.142.128:9001/hearbridge-bucket/20260316/ni.png',
-          'done',
-          '第一步',
-          '嘴角自然打开'
-        ),
-        new MediaResourceItem(
-          'v-step-2',
-          'step-2.jpg',
-          'http://192.168.142.128:9001/hearbridge-bucket/20260316/hao.png',
-          'done',
-          '第二步',
-          '舌尖轻抵下齿'
-        )
-      ],
-      [new MediaResourceItem('v-poster-2', 'video-cover-1773594512063.png', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/76b784b8925d45deb0afdb109387ad35video-cover-1773594511837.png', 'done')]
-    )
-  ]
+  private stageTransitionTimer: number = -1
+  private outlinePanelTimer: number = -1
+  private courseScoreEntries: CourseScoreEntry[] = []
+  private readonly fallbackCoverUrl: string = FALLBACK_COVER_URL
+  private readonly trainingItems: TrainingItem[] = getMockTrainingItems()
 
   aboutToAppear() {
     this.syncCurrentItemFromSelection()
@@ -165,22 +92,47 @@ export struct TrainPage {
   aboutToDisappear() {
     this.clearDemoAudioTimer()
     this.clearScoringTimer()
+    this.clearStageTransitionTimer()
+    this.clearOutlinePanelTimer()
     this.setScoringState(false)
   }
 
   private syncCurrentItemFromSelection() {
     const items: TrainingItem[] = this.getVisibleItems()
-    this.currentItemIndex = 0
-    for (let index = 0; index < items.length; index += 1) {
-      if (items[index].name === this.selectedPhrase) {
-        this.currentItemIndex = index
-        break
+    if (items.length === 0) {
+      this.resetCourseSummary()
+      this.resetTrainingFlow()
+      return
+    }
+
+    const restored = this.tryRestoreCourseProgress(items)
+    if (!restored) {
+      this.currentItemIndex = 0
+      for (let index = 0; index < items.length; index += 1) {
+        if (items[index].name === this.selectedPhrase) {
+          this.currentItemIndex = index
+          break
+        }
       }
+      this.resetCourseSummary()
     }
     this.resetTrainingFlow()
   }
 
-  private resetTrainingFlow() {
+  private resetCourseSummary() {
+    this.courseScoreEntries = []
+    this.summaryCompletedCount = 0
+    this.summaryAverageScore = 0
+    this.summaryBestScore = 0
+  }
+
+  private resetTrainingFlow(resetAnimationState: boolean = true) {
+    if (resetAnimationState) {
+      this.clearStageTransitionTimer()
+      this.isStageAnimating = false
+      this.stageContentOpacity = 1
+      this.stageContentOffsetX = 0
+    }
     this.currentStage = 'intro'
     this.practiceMode = this.trainingType === 'speech' ? 'audio' : 'video'
     this.isCapturing = false
@@ -189,6 +141,9 @@ export struct TrainPage {
     this.mockScore = 86
     this.recordedVideoUri = ''
     this.recordedAudioUri = ''
+    this.summaryMode = 'completed'
+    this.summaryPausedAtName = ''
+    this.showPauseDialog = false
     this.stopDemoAudioPlayback()
     if (this.trainingType === 'speech') {
       this.audioCaptureTip = '已就绪，选一段音频开始跟读吧。'
@@ -197,6 +152,98 @@ export struct TrainPage {
       this.audioCaptureTip = '当前是手势训练，请使用视频练习。'
       this.captureTip = '已就绪，选一段手势视频开始练习吧。'
     }
+  }
+
+  private getCourseProgressKey(): string {
+    return `${this.courseCode}|${this.trainingType}`
+  }
+
+  private tryRestoreCourseProgress(items: TrainingItem[]): boolean {
+    const snapshot = COURSE_PROGRESS_CACHE.get(this.getCourseProgressKey())
+    if (!snapshot) {
+      return false
+    }
+
+    this.courseScoreEntries = []
+    for (let i = 0; i < snapshot.scoreEntries.length; i += 1) {
+      this.courseScoreEntries.push(new CourseScoreEntry(snapshot.scoreEntries[i].itemId, snapshot.scoreEntries[i].score))
+    }
+    this.refreshSummaryStats()
+    this.summaryPausedAtName = snapshot.pausedAtItemName
+
+    const nextIndex = this.getFirstUncompletedIndex(items, snapshot.completedItemIds)
+    this.currentItemIndex = nextIndex
+    this.onSelectPhrase(items[this.currentItemIndex].name)
+    return true
+  }
+
+  private getFirstUncompletedIndex(items: TrainingItem[], completedIds: number[]): number {
+    for (let index = 0; index < items.length; index += 1) {
+      let completed = false
+      for (let i = 0; i < completedIds.length; i += 1) {
+        if (completedIds[i] === items[index].id) {
+          completed = true
+          break
+        }
+      }
+      if (!completed) {
+        return index
+      }
+    }
+    return Math.max(0, items.length - 1)
+  }
+
+  private saveCourseProgress(pausedAtName: string) {
+    const completedIds: number[] = []
+    const copiedEntries: CourseScoreEntry[] = []
+    for (let i = 0; i < this.courseScoreEntries.length; i += 1) {
+      completedIds.push(this.courseScoreEntries[i].itemId)
+      copiedEntries.push(new CourseScoreEntry(this.courseScoreEntries[i].itemId, this.courseScoreEntries[i].score))
+    }
+    COURSE_PROGRESS_CACHE.set(this.getCourseProgressKey(), new CourseProgressSnapshot(completedIds, copiedEntries, pausedAtName))
+  }
+
+  private clearCourseProgress() {
+    COURSE_PROGRESS_CACHE.delete(this.getCourseProgressKey())
+  }
+
+  private recordCurrentItemScore(score: number) {
+    const current = this.getCurrentItem()
+    if (current.id <= 0) {
+      return
+    }
+    let found = false
+    for (let i = 0; i < this.courseScoreEntries.length; i += 1) {
+      if (this.courseScoreEntries[i].itemId === current.id) {
+        this.courseScoreEntries[i].score = score
+        found = true
+        break
+      }
+    }
+    if (!found) {
+      this.courseScoreEntries.push(new CourseScoreEntry(current.id, score))
+    }
+    this.refreshSummaryStats()
+  }
+
+  private refreshSummaryStats() {
+    const count = this.courseScoreEntries.length
+    this.summaryCompletedCount = count
+    if (count === 0) {
+      this.summaryAverageScore = 0
+      this.summaryBestScore = 0
+      return
+    }
+    let total = 0
+    let best = 0
+    for (let i = 0; i < this.courseScoreEntries.length; i += 1) {
+      total += this.courseScoreEntries[i].score
+      if (this.courseScoreEntries[i].score > best) {
+        best = this.courseScoreEntries[i].score
+      }
+    }
+    this.summaryAverageScore = Math.floor(total / count)
+    this.summaryBestScore = best
   }
 
   private clearDemoAudioTimer() {
@@ -211,6 +258,51 @@ export struct TrainPage {
       clearTimeout(this.scoringTimer)
       this.scoringTimer = -1
     }
+  }
+
+  private clearStageTransitionTimer() {
+    if (this.stageTransitionTimer !== -1) {
+      clearTimeout(this.stageTransitionTimer)
+      this.stageTransitionTimer = -1
+    }
+  }
+
+  private clearOutlinePanelTimer() {
+    if (this.outlinePanelTimer !== -1) {
+      clearTimeout(this.outlinePanelTimer)
+      this.outlinePanelTimer = -1
+    }
+  }
+
+  private transitionToStage(nextStage: string, forward: boolean, scrollTop: boolean = true) {
+    if (this.currentStage === nextStage) {
+      return
+    }
+    this.clearStageTransitionTimer()
+    this.isStageAnimating = true
+
+    const outOffset: number = forward ? -28 : 28
+    animateTo({ duration: 120, curve: Curve.EaseInOut }, () => {
+      this.stageContentOpacity = 0
+      this.stageContentOffsetX = outOffset
+    })
+
+    this.stageTransitionTimer = setTimeout(() => {
+      this.currentStage = nextStage
+      this.stageContentOpacity = 0
+      this.stageContentOffsetX = forward ? 28 : -28
+      if (scrollTop) {
+        this.scrollContentToTop()
+      }
+      animateTo({ duration: 180, curve: Curve.EaseOut }, () => {
+        this.stageContentOpacity = 1
+        this.stageContentOffsetX = 0
+      })
+      this.stageTransitionTimer = setTimeout(() => {
+        this.isStageAnimating = false
+        this.stageTransitionTimer = -1
+      }, 190)
+    }, 130)
   }
 
   private setScoringState(isScoring: boolean) {
@@ -303,7 +395,7 @@ export struct TrainPage {
 
   private isItemMatchedToCourse(item: TrainingItem): boolean {
     if (this.courseCode === 'COURSE-301') {
-      return item.id === 6
+      return item.id === 6 || item.id === 7 || item.id === 8
     }
     if (this.courseCode === 'COURSE-302') {
       return item.id === 3
@@ -344,14 +436,6 @@ export struct TrainPage {
     return item.video.length > 0
   }
 
-  private hasAudio(item: TrainingItem): boolean {
-    return item.audio.length > 0
-  }
-
-  private hasActionImages(item: TrainingItem): boolean {
-    return item.actionImages.length > 0
-  }
-
   private getStageTitle(): string {
     if (this.currentStage === 'intro') {
       return '训练介绍'
@@ -364,6 +448,9 @@ export struct TrainPage {
     }
     if (this.currentStage === 'practice') {
       return '开始练习'
+    }
+    if (this.currentStage === 'summary') {
+      return '课程总结'
     }
     return '评分结果'
   }
@@ -381,6 +468,9 @@ export struct TrainPage {
     if (this.currentStage === 'practice') {
       return 4
     }
+    if (this.currentStage === 'summary') {
+      return 5
+    }
     return 5
   }
 
@@ -390,15 +480,6 @@ export struct TrainPage {
       return '0/0'
     }
     return `${Math.min(this.currentItemIndex + 1, totalCount)}/${totalCount}`
-  }
-
-  private getDifficultyStars(levelNum: number): string[] {
-    const stars: string[] = []
-    const safeLevel = Math.max(1, Math.min(5, levelNum))
-    for (let index = 0; index < 5; index += 1) {
-      stars.push(index < safeLevel ? 'filled' : 'empty')
-    }
-    return stars
   }
 
   private selectItem(index: number) {
@@ -411,27 +492,48 @@ export struct TrainPage {
     this.resetTrainingFlow()
   }
 
+  private switchItemWithAnimation(targetIndex: number, forward: boolean, targetStage: string = 'intro') {
+    const items: TrainingItem[] = this.getVisibleItems()
+    if (items.length === 0 || this.isStageAnimating) {
+      return
+    }
+    const nextIndex = Math.min(items.length - 1, Math.max(0, targetIndex))
+    if (nextIndex === this.currentItemIndex) {
+      return
+    }
+    this.clearStageTransitionTimer()
+    this.isStageAnimating = true
+    this.currentItemIndex = nextIndex
+    this.onSelectPhrase(items[this.currentItemIndex].name)
+    this.resetTrainingFlow(false)
+    this.currentStage = targetStage
+    this.stageContentOpacity = 0
+    this.stageContentOffsetX = forward ? 20 : -20
+    animateTo({ duration: 220, curve: Curve.EaseOut }, () => {
+      this.stageContentOpacity = 1
+      this.stageContentOffsetX = 0
+    })
+    this.stageTransitionTimer = setTimeout(() => {
+      this.isStageAnimating = false
+      this.stageTransitionTimer = -1
+    }, 230)
+  }
+
   private goToNextStage() {
-    if (this.isScoring) {
+    if (this.isScoring || this.isStageAnimating) {
       return
     }
     if (this.currentStage === 'intro') {
-      this.currentStage = this.hasVideo(this.getCurrentItem()) ? 'video' : 'guide'
-      if (this.currentStage === 'video') {
-        this.scrollVideoIntoView()
-      } else {
-        this.scrollContentToTop()
-      }
+      const next = this.hasVideo(this.getCurrentItem()) ? 'video' : 'guide'
+      this.transitionToStage(next, true, next !== 'video')
       return
     }
     if (this.currentStage === 'video') {
-      this.currentStage = 'guide'
-      this.scrollContentToTop()
+      this.transitionToStage('guide', true)
       return
     }
     if (this.currentStage === 'guide') {
-      this.currentStage = 'practice'
-      this.scrollContentToTop()
+      this.transitionToStage('practice', true)
       return
     }
     if (this.currentStage === 'practice') {
@@ -440,45 +542,35 @@ export struct TrainPage {
   }
 
   private goToPreviousStage() {
-    if (this.isScoring) {
+    if (this.isScoring || this.isStageAnimating) {
       return
     }
-    if (this.currentStage === 'video') {
-      this.currentStage = 'intro'
-      this.scrollContentToTop()
-      return
-    }
-    if (this.currentStage === 'guide') {
-      this.currentStage = this.hasVideo(this.getCurrentItem()) ? 'video' : 'intro'
-      if (this.currentStage === 'video') {
-        this.scrollVideoIntoView()
-      } else {
-        this.scrollContentToTop()
+    if (this.currentStage === 'intro') {
+      if (this.currentItemIndex > 0) {
+        this.switchItemWithAnimation(this.currentItemIndex - 1, false, 'result')
       }
       return
     }
+    if (this.currentStage === 'video') {
+      this.transitionToStage('intro', false)
+      return
+    }
+    if (this.currentStage === 'guide') {
+      const prev = this.hasVideo(this.getCurrentItem()) ? 'video' : 'intro'
+      this.transitionToStage(prev, false, prev !== 'video')
+      return
+    }
     if (this.currentStage === 'practice') {
-      this.currentStage = 'guide'
-      this.scrollContentToTop()
+      this.transitionToStage('guide', false)
       return
     }
     if (this.currentStage === 'result') {
-      this.currentStage = 'practice'
-      this.scrollContentToTop()
+      this.transitionToStage('practice', false)
+      return
     }
-  }
-
-  private scrollVideoIntoView() {
-    setTimeout(() => {
-      this.videoScroller.scrollTo({
-        xOffset: 0,
-        yOffset: 72,
-        animation: {
-          duration: 260,
-          curve: Curve.EaseInOut
-        }
-      })
-    }, 80)
+    if (this.currentStage === 'summary') {
+      this.transitionToStage('result', false)
+    }
   }
 
   private scrollContentToTop() {
@@ -507,11 +599,14 @@ export struct TrainPage {
     if (this.currentStage === 'result') {
       return this.resultScroller
     }
+    if (this.currentStage === 'summary') {
+      return this.resultScroller
+    }
     return this.introScroller
   }
 
   private submitPractice() {
-    if (this.isScoring) {
+    if (this.isScoring || this.isStageAnimating) {
       return
     }
     this.isCapturing = false
@@ -519,9 +614,9 @@ export struct TrainPage {
     this.clearScoringTimer()
     this.scoringTimer = setTimeout(() => {
       this.mockScore = this.trainingType === 'speech' ? 91 : 88
+      this.recordCurrentItemScore(this.mockScore)
       this.setScoringState(false)
-      this.currentStage = 'result'
-      this.scrollContentToTop()
+      this.transitionToStage('result', true)
       this.scoringTimer = -1
     }, 1800)
   }
@@ -583,17 +678,47 @@ export struct TrainPage {
   }
 
   private handleNextItem() {
+    if (this.isStageAnimating) {
+      return
+    }
     const items: TrainingItem[] = this.getVisibleItems()
     if (this.currentItemIndex < items.length - 1) {
-      this.selectItem(this.currentItemIndex + 1)
+      this.switchItemWithAnimation(this.currentItemIndex + 1, true)
       return
     }
     this.onCompleteTraining()
+    this.summaryMode = 'completed'
+    this.summaryPausedAtName = ''
+    this.transitionToStage('summary', true)
+  }
+
+  private finishCourseAndExit() {
+    if (this.summaryMode === 'completed') {
+      this.clearCourseProgress()
+    } else {
+      this.saveCourseProgress(this.summaryPausedAtName)
+    }
     this.onBackToCourseList()
   }
 
+  private openPauseDialog() {
+    if (this.currentStage === 'summary' || this.isStageAnimating) {
+      return
+    }
+    this.showPauseDialog = true
+  }
+
+  private handlePauseConfirm() {
+    this.showPauseDialog = false
+    const item = this.getCurrentItem()
+    this.summaryMode = 'paused'
+    this.summaryPausedAtName = item.name
+    this.saveCourseProgress(item.name)
+    this.transitionToStage('summary', true)
+  }
+
   private canShowPrevious(): boolean {
-    return this.currentStage !== 'intro'
+    return this.currentStage !== 'intro' || this.currentItemIndex > 0
   }
 
   private getPreviousLabel(): string {
@@ -610,135 +735,461 @@ export struct TrainPage {
     if (this.currentStage === 'result') {
       return '下一项'
     }
+    if (this.currentStage === 'summary') {
+      return '返回课程'
+    }
     return '下一步'
   }
 
   private handleFloatingNext() {
-    if (this.isScoring) {
+    if (this.isScoring || this.isStageAnimating) {
       return
     }
     if (this.currentStage === 'result') {
       this.handleNextItem()
       return
     }
+    if (this.currentStage === 'summary') {
+      this.finishCourseAndExit()
+      return
+    }
     this.goToNextStage()
   }
 
+  private handleStageSwipe(offsetX: number, offsetY: number) {
+    if (this.isScoring || this.isStageAnimating || this.showPauseDialog || this.currentStage === 'summary') {
+      return
+    }
+    const horizontal = Math.abs(offsetX)
+    const vertical = Math.abs(offsetY)
+    if (horizontal < 72 || horizontal < vertical * 1.2) {
+      return
+    }
+    if (offsetX < 0) {
+      this.handleFloatingNext()
+      return
+    }
+    if (this.canShowPrevious()) {
+      this.goToPreviousStage()
+    }
+  }
+
+  private isCurrentItemFavorited(): boolean {
+    const currentId = this.getCurrentItem().id
+    if (currentId <= 0) {
+      return false
+    }
+    for (let i = 0; i < this.favoriteItemIds.length; i += 1) {
+      if (this.favoriteItemIds[i] === currentId) {
+        return true
+      }
+    }
+    return false
+  }
+
+  private toggleCurrentItemFavorite() {
+    const currentId = this.getCurrentItem().id
+    if (currentId <= 0) {
+      return
+    }
+    const updated: number[] = []
+    let found = false
+    for (let i = 0; i < this.favoriteItemIds.length; i += 1) {
+      if (this.favoriteItemIds[i] === currentId) {
+        found = true
+        continue
+      }
+      updated.push(this.favoriteItemIds[i])
+    }
+    if (!found) {
+      updated.push(currentId)
+    }
+    this.favoriteItemIds = updated
+  }
+
+  private isItemCompleted(itemId: number): boolean {
+    for (let i = 0; i < this.courseScoreEntries.length; i += 1) {
+      if (this.courseScoreEntries[i].itemId === itemId) {
+        return true
+      }
+    }
+    return false
+  }
+
+  private getItemStatusText(item: TrainingItem, index: number): string {
+    if (this.isItemCompleted(item.id)) {
+      return '已完成'
+    }
+    if (index === this.currentItemIndex) {
+      return '进行中'
+    }
+    if (index < this.currentItemIndex) {
+      return '待完成'
+    }
+    return '未开始'
+  }
+
+  private getItemStatusColor(status: string): string {
+    if (status === '已完成') {
+      return '#2E79F4'
+    }
+    if (status === '进行中') {
+      return '#4C8DFF'
+    }
+    if (status === '待完成') {
+      return '#D6722B'
+    }
+    return '#91A1B8'
+  }
+
+  private openOutlinePanel() {
+    if (this.showOutlinePanel) {
+      return
+    }
+    this.clearOutlinePanelTimer()
+    this.showOutlinePanel = true
+    this.outlinePanelOffsetX = 360
+    animateTo({ duration: 220, curve: Curve.EaseOut }, () => {
+      this.outlinePanelOffsetX = 0
+    })
+  }
+
+  private closeOutlinePanel() {
+    if (!this.showOutlinePanel) {
+      return
+    }
+    this.clearOutlinePanelTimer()
+    animateTo({ duration: 180, curve: Curve.EaseInOut }, () => {
+      this.outlinePanelOffsetX = 360
+    })
+    this.outlinePanelTimer = setTimeout(() => {
+      this.showOutlinePanel = false
+      this.outlinePanelTimer = -1
+    }, 190)
+  }
+
   build() {
-    Stack({ alignContent: Alignment.Top }) {
-      if (this.currentStage === 'intro') {
-        Scroll(this.introScroller) {
+    Column() {
+      Stack({ alignContent: Alignment.Top }) {
+        Column() {
+        if (this.currentStage === 'intro') {
+          Scroll(this.introScroller) {
+            Column({ space: 16 }) {
+              Blank()
+                .height(106)
+              if (this.hasVisibleItems()) {
+                this.buildIntroStage(this.getCurrentItem())
+              } else {
+                this.buildEmptyState()
+              }
+            }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 6, bottom: 16 })
+          }
+          .width('100%')
+          .height('100%')
+          .scrollBar(BarState.Off)
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+        } else if (this.currentStage === 'video') {
           Column({ space: 16 }) {
             Blank()
               .height(106)
             if (this.hasVisibleItems()) {
-              this.buildIntroStage(this.getCurrentItem())
+              Column() {
+                this.buildVideoStage(this.getCurrentItem())
+              }
+              .width('100%')
+              .layoutWeight(1)
             } else {
-              this.buildEmptyState()
+              Column() {
+                this.buildEmptyState()
+              }
+              .width('100%')
+              .layoutWeight(1)
             }
           }
           .width('100%')
           .padding({ left: 16, right: 16, top: 6, bottom: 16 })
-        }
-        .width('100%')
-        .height('100%')
-        .scrollBar(BarState.Off)
-        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
-      } else if (this.currentStage === 'video') {
-        Scroll(this.videoScroller) {
-          Column({ space: 16 }) {
-            Blank()
-              .height(106)
-            if (this.hasVisibleItems()) {
-              this.buildVideoStage(this.getCurrentItem())
-            } else {
-              this.buildEmptyState()
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+        } else if (this.currentStage === 'guide') {
+          Scroll(this.guideScroller) {
+            Column({ space: 16 }) {
+              Blank()
+                .height(106)
+              if (this.hasVisibleItems()) {
+                this.buildGuideStage(this.getCurrentItem())
+              } else {
+                this.buildEmptyState()
+              }
             }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 6, bottom: 16 })
           }
           .width('100%')
-          .padding({ left: 16, right: 16, top: 6, bottom: 16 })
-        }
-        .width('100%')
-        .height('100%')
-        .scrollBar(BarState.Off)
-        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
-      } else if (this.currentStage === 'guide') {
-        Scroll(this.guideScroller) {
-          Column({ space: 16 }) {
-            Blank()
-              .height(106)
-            if (this.hasVisibleItems()) {
-              this.buildGuideStage(this.getCurrentItem())
-            } else {
-              this.buildEmptyState()
+          .height('100%')
+          .scrollBar(BarState.Off)
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+        } else if (this.currentStage === 'practice') {
+          Scroll(this.practiceScroller) {
+            Column({ space: 16 }) {
+              Blank()
+                .height(106)
+              if (this.hasVisibleItems()) {
+                this.buildPracticeStage(this.getCurrentItem())
+              } else {
+                this.buildEmptyState()
+              }
             }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 6, bottom: 16 })
           }
           .width('100%')
-          .padding({ left: 16, right: 16, top: 6, bottom: 16 })
-        }
-        .width('100%')
-        .height('100%')
-        .scrollBar(BarState.Off)
-        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
-      } else if (this.currentStage === 'practice') {
-        Scroll(this.practiceScroller) {
-          Column({ space: 16 }) {
-            Blank()
-              .height(106)
-            if (this.hasVisibleItems()) {
-              this.buildPracticeStage(this.getCurrentItem())
-            } else {
-              this.buildEmptyState()
+          .height('100%')
+          .scrollBar(BarState.Off)
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+        } else if (this.currentStage === 'summary') {
+          Scroll(this.resultScroller) {
+            Column({ space: 16 }) {
+              SummaryStageContent({
+                trainingType: this.trainingType,
+                completedCount: this.summaryCompletedCount,
+                totalCount: this.getVisibleItems().length,
+                averageScore: this.summaryAverageScore,
+                bestScore: this.summaryBestScore,
+                mode: this.summaryMode,
+                pausedAtName: this.summaryPausedAtName,
+                onFinish: () => {
+                  this.finishCourseAndExit()
+                }
+              })
             }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 16, bottom: 16 })
+            .backgroundColor('#F4F7FB')
           }
           .width('100%')
-          .padding({ left: 16, right: 16, top: 6, bottom: 16 })
-        }
-        .width('100%')
-        .height('100%')
-        .scrollBar(BarState.Off)
-        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
-      } else {
-        Scroll(this.resultScroller) {
-          Column({ space: 16 }) {
-            Blank()
-              .height(106)
-            if (this.hasVisibleItems()) {
-              this.buildResultStage(this.getCurrentItem())
-            } else {
-              this.buildEmptyState()
-            }
-          }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 6, bottom: 16 })
+          .height('100%')
           .backgroundColor('#F4F7FB')
+          .scrollBar(BarState.Off)
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+        } else {
+          Scroll(this.resultScroller) {
+            Column({ space: 16 }) {
+              Blank()
+                .height(106)
+              if (this.hasVisibleItems()) {
+                this.buildResultStage(this.getCurrentItem())
+              } else {
+                this.buildEmptyState()
+              }
+            }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 6, bottom: 16 })
+            .backgroundColor('#F4F7FB')
+          }
+          .width('100%')
+          .backgroundColor('#F4F7FB')
+          .height('100%')
+          .scrollBar(BarState.Off)
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+        }
         }
         .width('100%')
         .height('100%')
-        .backgroundColor('#F4F7FB')
-        .scrollBar(BarState.Off)
-        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
-      }
+        .opacity(this.stageContentOpacity)
+        .translate({ x: this.stageContentOffsetX, y: 0 })
 
-      this.buildPreloadAssets(this.getCurrentItem())
+        this.buildPreloadAssets(this.getCurrentItem())
 
-      Column({ space: 10 }) {
-        this.buildTopHeader()
-        this.buildStageStepper()
+        if (this.currentStage !== 'summary') {
+          Column({ space: 10 }) {
+            this.buildTopHeader()
+            this.buildStageStepper()
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 0, bottom: 10 })
+          .backgroundColor('#FFFFFF')
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+        }
+
+        if (this.isScoring) {
+          this.buildScoringOverlay()
+        }
+
+        if (this.showPauseDialog) {
+          this.buildPauseDialog()
+        }
+
+        if (this.showOutlinePanel) {
+          this.buildOutlinePanel()
+        }
       }
+      .layoutWeight(1)
+      .gesture(
+        PanGesture({ direction: PanDirection.Horizontal, distance: 8 })
+          .onActionEnd((event) => {
+            this.handleStageSwipe(event.offsetX, event.offsetY)
+          })
+      )
       .width('100%')
-      .padding({ left: 16, right: 16, top: 0, bottom: 10 })
-      .backgroundColor('#FFFFFF')
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+      .backgroundColor('#F4F7FB')
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
 
-      if (this.isScoring) {
-        this.buildScoringOverlay()
+      if (this.currentStage !== 'summary') {
+        this.buildTrainBottomBar()
       }
     }
     .width('100%')
     .height('100%')
     .backgroundColor('#F4F7FB')
+  }
+
+  @Builder
+  private buildTrainBottomBar() {
+    Column() {
+      Row() {
+        Button() {
+          Column({ space: 2 }) {
+            SymbolGlyph(this.isCurrentItemFavorited() ? $r('sys.symbol.star_fill') : $r('sys.symbol.star'))
+              .fontSize(18)
+              .fontColor([this.isCurrentItemFavorited() ? '#2E79F4' : '#7E8FA8'])
+
+            Text(this.isCurrentItemFavorited() ? '已收藏' : '收藏')
+              .fontSize(11)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.isCurrentItemFavorited() ? '#2E79F4' : '#5F718B')
+          }
+          .alignItems(HorizontalAlign.Center)
+        }
+          .width(56)
+          .height(46)
+          .stateEffect(false)
+          .backgroundColor(Color.Transparent)
+          .borderRadius(0)
+          .onClick(() => {
+            this.toggleCurrentItemFavorite()
+          })
+
+        Button() {
+          Column({ space: 2 }) {
+            SymbolGlyph($r('sys.symbol.chevron_forward'))
+              .fontSize(18)
+              .fontColor(['#7E8FA8'])
+
+            Text(this.getProgressText())
+              .fontSize(11)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#5F718B')
+          }
+          .alignItems(HorizontalAlign.Center)
+        }
+          .width(56)
+          .height(46)
+          .stateEffect(false)
+          .backgroundColor(Color.Transparent)
+          .borderRadius(0)
+          .onClick(() => {
+            this.openOutlinePanel()
+          })
+      }
+      .width('100%')
+      .justifyContent(FlexAlign.End)
+      .padding({ left: 12, right: 16, top: 2, bottom: 6 })
+    }
+    .width('100%')
+    .backgroundColor('#FFFFFF')
+    .border({
+      width: { top: 1, right: 0, bottom: 0, left: 0 },
+      color: '#E9EFF8'
+    })
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+  }
+
+  @Builder
+  private buildOutlinePanel() {
+    Stack({ alignContent: Alignment.End }) {
+      Column() {
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor('#4D0B1522')
+      .onClick(() => {
+        this.closeOutlinePanel()
+      })
+
+      Column({ space: 12 }) {
+        Row() {
+          Text('训练清单')
+            .fontSize(18)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#1F2A44')
+
+          Blank()
+
+          Text(this.getProgressText())
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#2E79F4')
+            .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+            .backgroundColor('#EEF5FF')
+            .borderRadius(10)
+        }
+        .width('100%')
+
+        Scroll() {
+          Column({ space: 8 }) {
+            ForEach(this.getVisibleItems(), (item: TrainingItem, index: number) => {
+              Row({ space: 10 }) {
+                Text(`${index + 1}`)
+                  .width(24)
+                  .height(24)
+                  .textAlign(TextAlign.Center)
+                  .fontSize(11)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(index === this.currentItemIndex ? '#FFFFFF' : '#7A8CA7')
+                  .backgroundColor(index === this.currentItemIndex ? '#2E79F4' : '#EEF3FB')
+                  .borderRadius(12)
+
+                Column({ space: 4 }) {
+                  Text(item.name)
+                    .fontSize(14)
+                    .fontWeight(index === this.currentItemIndex ? FontWeight.Medium : FontWeight.Regular)
+                    .fontColor('#1F2A44')
+                    .maxLines(1)
+
+                  Text(this.getItemStatusText(item, index))
+                    .fontSize(12)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor(this.getItemStatusColor(this.getItemStatusText(item, index)))
+                }
+                .layoutWeight(1)
+              }
+              .width('100%')
+              .padding({ left: 10, right: 10, top: 10, bottom: 10 })
+              .backgroundColor(index === this.currentItemIndex ? '#F5F9FF' : '#FFFFFF')
+              .borderRadius(12)
+              .border({
+                width: 1,
+                color: index === this.currentItemIndex ? '#D6E5FD' : '#EAF0F8'
+              })
+            }, (item: TrainingItem) => `${item.id}`)
+          }
+          .width('100%')
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+      }
+      .width('76%')
+      .height('100%')
+      .padding({ left: 14, right: 14, top: 56, bottom: 20 })
+      .backgroundColor('#FFFFFF')
+      .translate({ x: this.outlinePanelOffsetX, y: 0 })
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+    }
+    .width('100%')
+    .height('100%')
+    .zIndex(1002)
   }
 
   @Builder
@@ -808,76 +1259,152 @@ export struct TrainPage {
   }
 
   @Builder
+  private buildPauseDialog() {
+    Stack({ alignContent: Alignment.Center }) {
+      Column() {
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor('#660B1522')
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+
+      Column({ space: 14 }) {
+        Text('暂停训练')
+          .fontSize(18)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#1F2A44')
+
+        Text('确认暂停当前训练吗？系统会记录进度，下次从未完成项继续。')
+          .fontSize(13)
+          .fontColor('#5F718B')
+          .lineHeight(20)
+
+        Row({ space: 10 }) {
+          Button('继续训练')
+            .layoutWeight(1)
+            .height(42)
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#2E79F4')
+            .backgroundColor('#EEF5FF')
+            .borderRadius(14)
+            .onClick(() => {
+              this.showPauseDialog = false
+            })
+
+          Button('确认暂停')
+            .layoutWeight(1)
+            .height(42)
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#FFFFFF')
+            .backgroundColor('#2E79F4')
+            .borderRadius(14)
+            .onClick(() => {
+              this.handlePauseConfirm()
+            })
+        }
+        .width('100%')
+      }
+      .width('86%')
+      .padding(20)
+      .backgroundColor('#FFFFFF')
+      .borderRadius(18)
+      .border({ width: 1, color: '#E4ECF8' })
+    }
+    .width('100%')
+    .height('100%')
+    .zIndex(1001)
+  }
+
+  @Builder
   private buildTopHeader() {
     Column({ space: 10 }) {
       Row({ space: 8 }) {
-        Text(this.courseName)
+        Button() {
+          SymbolGlyph($r('sys.symbol.power'))
+            .fontSize(15)
+            .fontColor([this.currentStage === 'summary' ? '#A6B4C8' : '#5F7593'])
+        }
+          .width(34)
+          .height(34)
+          .backgroundColor('#F3F6FC')
+          .borderRadius(17)
+          .enabled(this.currentStage !== 'summary')
+          .opacity(this.currentStage === 'summary' ? 0.5 : 1)
+          .onClick(() => {
+            this.openPauseDialog()
+          })
+
+        Text(this.getHeaderTitle())
           .fontSize(24)
           .fontWeight(FontWeight.Bold)
           .fontColor('#1F2A44')
+          .layoutWeight(1)
+          .maxLines(1)
 
-        Blank()
-
-        Stack({ alignContent: Alignment.Center }) {
-          Row() {
-          }
+        Button() {
+          SymbolGlyph($r('sys.symbol.chevron_backward'))
+            .fontSize(15)
+            .fontColor([this.canShowPrevious() && !this.isScoring && !this.isStageAnimating ? '#2E79F4' : '#A6B4C8'])
+        }
           .width(34)
           .height(34)
-          .backgroundColor('#EEF4FF')
+          .backgroundColor('#FFFFFF')
           .borderRadius(17)
+          .enabled(this.canShowPrevious() && !this.isScoring && !this.isStageAnimating)
+          .opacity(this.canShowPrevious() && !this.isScoring && !this.isStageAnimating ? 1 : 0.5)
+          .onClick(() => {
+            this.goToPreviousStage()
+          })
 
-          SymbolGlyph($r('sys.symbol.chevron_backward'))
-            .fontSize(17)
-            .fontColor(['#4C79C9'])
-        }
-        .width(34)
-        .height(34)
-        .onClick(() => {
-          if (this.currentStage === 'intro') {
-            this.onBackToCourseList()
-          } else {
-            this.currentStage = 'intro'
-          }
-        })
-
-        if (this.canShowPrevious()) {
-          Button(this.getPreviousLabel())
+        if (this.currentStage === 'result' || this.currentStage === 'summary') {
+          Button(this.getNextLabel())
             .height(34)
             .fontSize(12)
             .fontWeight(FontWeight.Medium)
-            .fontColor('#2E79F4')
-            .backgroundColor('#FFFFFF')
+            .fontColor('#FFFFFF')
+            .backgroundColor('#2E79F4')
             .borderRadius(17)
             .padding({ left: 12, right: 12 })
-            .enabled(!this.isScoring)
-            .opacity(this.isScoring ? 0.45 : 1)
+            .enabled(!this.isScoring && !this.isStageAnimating)
+            .opacity(this.isScoring || this.isStageAnimating ? 0.55 : 1)
             .onClick(() => {
-              this.goToPreviousStage()
+              this.handleFloatingNext()
+            })
+        } else {
+          Button() {
+            SymbolGlyph($r('sys.symbol.chevron_forward'))
+              .fontSize(15)
+              .fontColor(['#FFFFFF'])
+          }
+            .width(34)
+            .height(34)
+            .backgroundColor('#2E79F4')
+            .borderRadius(17)
+            .enabled(!this.isScoring && !this.isStageAnimating)
+            .opacity(this.isScoring || this.isStageAnimating ? 0.55 : 1)
+            .onClick(() => {
+              this.handleFloatingNext()
             })
         }
-
-        Button(this.getNextLabel())
-          .height(34)
-          .fontSize(12)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#FFFFFF')
-          .backgroundColor('#2E79F4')
-          .borderRadius(17)
-          .padding({ left: 12, right: 12 })
-          .enabled(!this.isScoring)
-          .opacity(this.isScoring ? 0.55 : 1)
-          .onClick(() => {
-            this.handleFloatingNext()
-          })
       }
       .width('100%')
 
-      Text(`${this.getStageTitle()} · 第 ${this.getProgressText()} 项`)
+      Text(`${this.courseName} · 第 ${this.getProgressText()} 项 · ${this.getStageTitle()}`)
         .width('100%')
         .fontSize(12)
         .fontColor('#7A8CA7')
+        .maxLines(1)
     }
     .width('100%')
+  }
+
+  private getHeaderTitle(): string {
+    if (this.hasVisibleItems()) {
+      return this.getCurrentItem().name
+    }
+    return this.courseName
   }
 
   @Builder
@@ -917,104 +1444,36 @@ export struct TrainPage {
 
   @Builder
   private buildIntroStage(item: TrainingItem) {
-    Column({ space: 16 }) {
-      Stack({ alignContent: Alignment.BottomStart }) {
-        Image(this.getPrimaryCoverUrl(item))
-          .width('100%')
-          .height(188)
-          .objectFit(ImageFit.Cover)
-          .borderRadius(20)
-
-        Column() {
-        }
-        .width('100%')
-        .height(188)
-        .borderRadius(20)
-        .linearGradient({
-          angle: 180,
-          colors: [['#00000012', 0], ['#00000088', 1]]
-        })
-
-        Column({ space: 6 }) {
-          Text(item.name)
-            .fontSize(30)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#FFFFFF')
-            .shadow({ radius: 12, color: '#00000099', offsetX: 0, offsetY: 3 })
-
-          Text(item.meaning)
-            .fontSize(13)
-            .fontColor('#F2F7FF')
-            .shadow({ radius: 10, color: '#00000088', offsetX: 0, offsetY: 2 })
-        }
-        .alignItems(HorizontalAlign.Start)
-        .padding(18)
-      }
-      .width('100%')
-      .height(188)
-
-      Column({ space: 14 }) {
-        this.buildDifficultySection(item.levelNum)
-        this.buildInfoSection('训练说明', item.description)
-        this.buildInfoSection('训练目标', item.goal)
-        this.buildTagSection('本轮关注点', item.precautions, '#EEF5FF', '#2E79F4')
-      }
-      .width('100%')
-      .padding(18)
-      .backgroundColor('#FFFFFF')
-      .borderRadius(18)
-      .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
-    }
-    .width('100%')
+    IntroStageContent({
+      item: item,
+      coverUrl: this.getPrimaryCoverUrl(item)
+    })
   }
 
   @Builder
   private buildVideoStage(item: TrainingItem) {
-    Column() {
-      Row() {
-        Blank()
-
-        Video({
-          src: item.video[0].url,
-          previewUri: this.getVideoPosterUrl(item),
-          controller: this.videoController
-        })
-          .width('78%')
-          .height(520)
-          .borderRadius(20)
-          .controls(true)
-          .autoPlay(true)
-
-        Blank()
-      }
-      .width('100%')
+    Stack({ alignContent: Alignment.Center }) {
+      Video({
+        src: item.video[0].url,
+        previewUri: this.getVideoPosterUrl(item),
+        controller: this.videoController
+      })
+        .width(320)
+        .height(568)
+        .borderRadius(24)
+        .controls(true)
+        .autoPlay(true)
     }
     .width('100%')
-    .padding({ top: 8 })
+    .height('100%')
   }
 
   @Builder
   private buildGuideStage(item: TrainingItem) {
-    Column({ space: 16 }) {
-      if (this.hasActionImages(item)) {
-        this.buildActionImagesCard(item)
-      }
-
-      Column({ space: 16 }) {
-        this.buildInfoSection('动作说明', item.description)
-        this.buildTagSection('注意要点', item.precautions, '#EEF5FF', '#2E79F4')
-        this.buildTagSection('常见错误', item.commonErrors, '#FFF1F1', '#D94C4C')
-      }
-      .width('100%')
-      .padding(18)
-      .backgroundColor('#FFFFFF')
-      .borderRadius(18)
-      .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
-    }
-    .width('100%')
+    GuideStageContent({ item: item })
   }
 
-    @Builder
+  @Builder
   private buildPracticeStage(item: TrainingItem) {
     Column({ space: 16 }) {
       if (this.trainingType === 'speech') {
@@ -1044,7 +1503,7 @@ export struct TrainPage {
         }
         .width('100%')
 
-        if (this.trainingType === 'speech' && this.practiceMode === 'audio' && this.hasAudio(item)) {
+        if (this.trainingType === 'speech' && this.practiceMode === 'audio' && item.audio.length > 0) {
           Text('先听示范，模仿更准')
             .width('100%')
             .fontSize(18)
@@ -1137,7 +1596,6 @@ export struct TrainPage {
               .lineHeight(18)
               .fontColor('#5F7593')
 
-            // Keep audio player hidden and controlled by buttons.
             Video({
               src: item.audio[0].url,
               controller: this.practiceVideoController
@@ -1175,7 +1633,7 @@ export struct TrainPage {
 
         Text(this.trainingType === 'speech'
           ? (this.practiceMode === 'audio'
-            ? (this.hasAudio(item) ? '先听示范，再录一遍，你会更容易拿到高分。' : '没有示范也没关系，直接上传你的练习音频即可。')
+            ? (item.audio.length > 0 ? '先听示范，再录一遍，你会更容易拿到高分。' : '没有示范也没关系，直接上传你的练习音频即可。')
             : '建议横屏拍摄，口型清晰、语速稳定，评分会更准确。')
           : '请完整拍到手部和上半身动作，评估结果会更稳定。')
           .width('100%')
@@ -1326,621 +1784,16 @@ export struct TrainPage {
 
   @Builder
   private buildResultStage(item: TrainingItem) {
-    Column({ space: 16 }) {
-      Stack({ alignContent: Alignment.TopStart }) {
-        Column() {
-        }
-        .width('100%')
-        .height(412)
-        .backgroundColor('#FFFFFF')
-        .borderRadius(26)
-
-        Column() {
-        }
-        .width('100%')
-        .height(118)
-        .linearGradient({
-          angle: 180,
-          colors: [['#F7FAFF', 0], ['#FFFFFF', 1]]
-        })
-        .borderRadius({ topLeft: 26, topRight: 26, bottomLeft: 0, bottomRight: 0 })
-
-        Column() {
-        }
-        .width('100%')
-        .height(412)
-        .backgroundColor('#FFFFFF')
-        .borderRadius(26)
-        .opacity(0.02)
-
-        Column({ space: 16 }) {
-          Row() {
-            Text('评分结果')
-              .fontSize(14)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#6C7C95')
-          }
-          .width('100%')
-
-          Stack({ alignContent: Alignment.Center }) {
-            Column() {
-            }
-            .width(178)
-            .height(178)
-            .borderRadius(89)
-            .backgroundColor('#F7F9FD')
-            .shadow({ radius: 20, color: '#1F2A4412', offsetX: 0, offsetY: 10 })
-            .border({
-              width: 1,
-              color: '#E8EEF8'
-            })
-
-            Column() {
-            }
-            .width(154)
-            .height(154)
-            .borderRadius(77)
-            .border({
-              width: 10,
-              color: '#C8DEFF'
-            })
-            .shadow({ radius: 8, color: '#FFFFFFCC', offsetX: 0, offsetY: 0 })
-
-            Column({ space: 4 }) {
-              Text('91')
-                .fontSize(60)
-                .fontWeight(FontWeight.Bolder)
-                .fontStyle(FontStyle.Italic)
-                .fontColor('#2E79F4')
-
-              Text('训练得分')
-                .fontSize(12)
-                .fontWeight(FontWeight.Medium)
-                .fontColor('#72829A')
-                .letterSpacing(0.8)
-            }
-          }
-          .width('100%')
-          .height(178)
-
-          Text('表现稳定，建议继续巩固尾音控制')
-            .width('100%')
-            .fontSize(18)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#1F2A44')
-            .textAlign(TextAlign.Center)
-
-          Text('系统根据本轮动作完成度、节奏稳定性与发音表现综合生成本次训练反馈。')
-            .width('100%')
-            .fontSize(12)
-            .fontColor('#7D8CA2')
-            .lineHeight(18)
-            .textAlign(TextAlign.Center)
-
-          Column() {
-          }
-          .width('100%')
-          .height(1)
-          .backgroundColor('#EDF2F8')
-
-          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Center, alignItems: ItemAlign.Start }) {
-            this.buildResultBadge('完成度高', '#EEF5FF', '#2E79F4')
-            this.buildResultBadge('节奏准确', '#EEF5FF', '#2E79F4')
-            this.buildResultBadge('尾音待加强', '#FFF1F1', '#D94C4C')
-          }
-          .width('100%')
-        }
-        .width('100%')
-        .padding(22)
+    ResultStageContent({
+      itemName: item.name,
+      hasNextItem: this.currentItemIndex < this.getVisibleItems().length - 1,
+      onRetry: () => {
+        this.resetTrainingFlow()
+      },
+      onNext: () => {
+        this.handleNextItem()
       }
-      .width('100%')
-      .height(412)
-      .shadow({ radius: 20, color: '#15304B14', offsetX: 0, offsetY: 10 })
-      .border({
-        width: 1,
-        color: '#E8EEF7'
-      })
-
-      Column({ space: 14 }) {
-        Text('维度分析')
-          .width('100%')
-          .fontSize(17)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#1F2A44')
-
-        this.buildMetricRow('动作完成度', 93)
-        this.buildMetricRow('节奏稳定性', 89)
-        this.buildMetricRow('发音清晰度', 84)
-      }
-      .width('100%')
-      .padding(18)
-      .backgroundColor('#F8FAFD')
-      .borderRadius(20)
-      .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
-      .border({
-        width: 1,
-        color: '#E8EEF7'
-      })
-
-      this.buildFeedbackModule(
-        '本次亮点',
-        ['口型稳定', '节奏自然', '完成度高'],
-        '本轮训练整体节奏稳定，关键发音动作完成较好，跟读完成度也比较高。',
-        '#EEF5FF',
-        '#2E79F4'
-      )
-
-      this.buildFeedbackModule(
-        '建议改进',
-        ['尾音控制不足'],
-        '建议下一轮训练中放慢尾音收束速度，注意口型闭合时机，让结尾更清晰稳定。',
-        '#FFF1F1',
-        '#D94C4C'
-      )
-
-      this.buildRecentTrendCard()
-
-      Row({ space: 12 }) {
-        Button('再练一次')
-          .layoutWeight(1)
-          .height(48)
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#2E79F4')
-          .backgroundColor('#EEF5FF')
-          .borderRadius(18)
-          .onClick(() => {
-            this.resetTrainingFlow()
-          })
-
-        Button(this.currentItemIndex < this.getVisibleItems().length - 1 ? '下一项' : '返回课程')
-          .layoutWeight(1)
-          .height(48)
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#FFFFFF')
-          .linearGradient({
-            angle: 90,
-            colors: [['#6EA8FF', 0], ['#2E79F4', 1]]
-          })
-          .borderRadius(18)
-          .onClick(() => {
-            this.handleNextItem()
-          })
-      }
-      .width('100%')
-    }
-    .width('100%')
-  }
-
-  @Builder
-  private buildPracticeChip(mode: string, label: string, active: boolean) {
-    Button(label)
-      .type(ButtonType.Normal)
-      .stateEffect(true)
-      .fontSize(13)
-      .fontWeight(active ? FontWeight.Bold : FontWeight.Medium)
-      .fontColor(active ? '#FFFFFF' : '#607089')
-      .height(40)
-      .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-      .backgroundColor(active ? '#2E79F4' : '#FFFFFF')
-      .borderRadius(16)
-      .border({ width: 1, color: active ? '#2E79F4' : '#DCE7F6' })
-      .shadow({
-        radius: active ? 12 : 0,
-        color: active ? '#2E79F433' : '#00000000',
-        offsetX: 0,
-        offsetY: 4
-      })
-      .onClick(() => {
-        this.practiceMode = mode
-      })
-  }
-
-  @Builder
-  private buildScoreTag(label: string, value: string) {
-    Column({ space: 4 }) {
-      Text(label)
-        .fontSize(11)
-        .fontColor('#7A8CA7')
-
-      Text(value)
-        .fontSize(13)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#1F2A44')
-    }
-    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-    .backgroundColor('#F5F8FD')
-    .borderRadius(14)
-  }
-
-  @Builder
-  private buildMetricCard(label: string, value: number, description: string) {
-    Column({ space: 8 }) {
-      Row() {
-        Text(label)
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#1F2A44')
-
-        Blank()
-
-        Text(`${value}`)
-          .fontSize(16)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#2E79F4')
-      }
-      .width('100%')
-
-      Stack({ alignContent: Alignment.Start }) {
-        Column() {
-        }
-        .width('100%')
-        .height(8)
-        .backgroundColor('#ECF2FA')
-        .borderRadius(4)
-
-        Column() {
-        }
-        .width(`${value}%`)
-        .height(8)
-        .linearGradient({
-          angle: 0,
-          colors: [['#7DB2FF', 0], ['#2E79F4', 1]]
-        })
-        .borderRadius(4)
-      }
-      .width('100%')
-
-      Text(description)
-        .fontSize(11)
-        .fontColor('#7A8CA7')
-        .lineHeight(17)
-    }
-    .width('48%')
-    .padding(14)
-    .backgroundColor('#F8FBFF')
-    .borderRadius(16)
-  }
-
-  @Builder
-  private buildMetricRow(label: string, value: number) {
-    Column({ space: 8 }) {
-      Row() {
-        Text(label)
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#1F2A44')
-
-        Blank()
-
-        Text(`${value}`)
-          .fontSize(15)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#2E79F4')
-      }
-      .width('100%')
-
-      Stack({ alignContent: Alignment.Start }) {
-        Column() {
-        }
-        .width('100%')
-        .height(10)
-        .backgroundColor('#ECF2FA')
-        .borderRadius(5)
-
-        Column() {
-        }
-        .width(`${value}%`)
-        .height(10)
-        .backgroundColor('#2E79F4')
-        .borderRadius(5)
-      }
-      .width('100%')
-    }
-    .width('100%')
-    .padding(14)
-    .backgroundColor('#F6F8FC')
-    .borderRadius(16)
-    .border({
-      width: 1,
-      color: '#E3ECF8'
     })
-    .shadow({ radius: 6, color: '#FFFFFFD8', offsetX: 0, offsetY: 0 })
-  }
-
-  @Builder
-  private buildResultBadge(label: string, backgroundColor: string, fontColor: string) {
-    Text(label)
-      .fontSize(12)
-      .fontWeight(FontWeight.Medium)
-      .fontColor(fontColor)
-      .padding({ left: 12, right: 12, top: 9, bottom: 9 })
-      .backgroundColor(backgroundColor)
-      .borderRadius(14)
-      .border({
-        width: 1,
-        color: backgroundColor === '#FFF1F1' ? '#F1D7D7' : '#DDE9F8'
-      })
-      .margin({ right: 8, bottom: 8 })
-  }
-
-  @Builder
-  private buildFeedbackModule(title: string, tags: string[], description: string, tagBackgroundColor: string, tagColor: string) {
-    Column({ space: 12 }) {
-      Text(title)
-        .width('100%')
-        .fontSize(17)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#1F2A44')
-
-      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start, alignItems: ItemAlign.Start }) {
-        ForEach(tags, (tag: string) => {
-          Text(tag)
-            .fontSize(12)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(tagColor)
-            .padding({ left: 10, right: 10, top: 7, bottom: 7 })
-            .backgroundColor(tagBackgroundColor)
-            .borderRadius(12)
-            .margin({ right: 8, bottom: 8 })
-        }, (tag: string) => tag)
-      }
-      .width('100%')
-
-      Text(description)
-        .width('100%')
-        .fontSize(13)
-        .fontColor('#6A7B93')
-        .lineHeight(21)
-    }
-    .width('100%')
-    .padding(18)
-    .backgroundColor('#F9FBFE')
-    .borderRadius(20)
-    .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
-  }
-
-  @Builder
-  private buildRecentTrendCard() {
-    Column({ space: 14 }) {
-      Row() {
-        Text('最近表现')
-          .fontSize(17)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#1F2A44')
-
-        Blank()
-
-        Text('近 5 次')
-          .fontSize(12)
-          .fontColor('#7A8CA7')
-      }
-      .width('100%')
-
-      Row({ space: 10 }) {
-        this.buildTrendBar('1', 74, false)
-        this.buildTrendBar('2', 79, false)
-        this.buildTrendBar('3', 83, false)
-        this.buildTrendBar('4', 87, false)
-        this.buildTrendBar('5', 91, true)
-      }
-      .width('100%')
-      .alignItems(VerticalAlign.Bottom)
-
-      Text('最近 5 次训练整体呈稳定上升趋势，当前完成度和节奏控制都有明显改善。')
-        .width('100%')
-        .fontSize(13)
-        .fontColor('#6A7B93')
-        .lineHeight(21)
-    }
-    .width('100%')
-    .padding(18)
-    .backgroundColor('#F9FBFE')
-    .borderRadius(20)
-    .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
-  }
-
-  @Builder
-  private buildTrendBar(label: string, score: number, highlighted: boolean) {
-    Column({ space: 8 }) {
-      Text(`${score}`)
-        .fontSize(11)
-        .fontWeight(highlighted ? FontWeight.Bold : FontWeight.Medium)
-        .fontColor(highlighted ? '#2E79F4' : '#6C7C95')
-
-      Stack({ alignContent: Alignment.Bottom }) {
-        Column() {
-        }
-        .width('100%')
-        .height('100%')
-        .backgroundColor('#F7FAFD')
-        .borderRadius(12)
-
-        Column() {
-        }
-        .width('100%')
-        .height(`${score}%`)
-        .linearGradient({
-          angle: 180,
-          colors: highlighted ? [['#6EA8FF', 0], ['#2E79F4', 1]] : [['#C9D8EB', 0], ['#AFC3DA', 1]]
-        })
-        .borderRadius({ topLeft: 8, topRight: 8, bottomLeft: 8, bottomRight: 8 })
-      }
-      .width('100%')
-      .layoutWeight(1)
-      .padding({ left: 6, right: 6, top: 8, bottom: 8 })
-      .backgroundColor(highlighted ? '#F4F8FF' : '#F8FAFD')
-      .borderRadius(14)
-      .border({
-        width: 1,
-        color: highlighted ? '#D9E6F8' : '#E8EEF6'
-      })
-
-      Text(label)
-        .fontSize(11)
-        .fontColor('#8A99AD')
-    }
-    .width(52)
-    .height(132)
-    .alignItems(HorizontalAlign.Center)
-  }
-
-  @Builder
-  private buildResultPill(label: string, value: string, backgroundColor: string, fontColor: string) {
-    Column({ space: 4 }) {
-      Text(label)
-        .fontSize(10)
-        .fontColor('#7A8CA7')
-
-      Text(value)
-        .fontSize(12)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(fontColor)
-    }
-    .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-    .backgroundColor(backgroundColor)
-    .borderRadius(14)
-  }
-
-  @Builder
-  private buildActionImagesCard(item: TrainingItem) {
-    Column({ space: 12 }) {
-      Text('步骤动作')
-        .width('100%')
-        .fontSize(18)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#1F2A44')
-
-      Swiper() {
-        ForEach(item.actionImages, (resource: MediaResourceItem, index: number) => {
-          this.buildActionImage(resource, index, item.actionImages.length)
-        }, (resource: MediaResourceItem) => resource.uid)
-      }
-      .width('100%')
-      .height(318)
-      .indicator(true)
-      .loop(false)
-      .autoPlay(false)
-    }
-    .width('100%')
-    .padding(18)
-    .backgroundColor('#FFFFFF')
-    .borderRadius(18)
-    .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
-  }
-
-  @Builder
-  private buildActionImage(resource: MediaResourceItem, index: number, total: number) {
-    Column({ space: 10 }) {
-      Row() {
-        Text(`步骤 ${index + 1}`)
-          .fontSize(12)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#2E79F4')
-          .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-          .backgroundColor('#EEF5FF')
-          .borderRadius(12)
-
-        Blank()
-
-        Text(`${index + 1}/${total}`)
-          .fontSize(12)
-          .fontColor('#7A8CA7')
-      }
-      .width('100%')
-
-      Image(resource.url)
-        .width('100%')
-        .height(236)
-        .objectFit(ImageFit.Contain)
-        .borderRadius(16)
-        .backgroundColor('#F5F8FD')
-
-      if (resource.description.length > 0) {
-        Text(resource.description)
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#42526B')
-          .lineHeight(22)
-          .maxLines(3)
-      }
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  private buildInfoSection(title: string, content: string) {
-    Column({ space: 8 }) {
-      Text(title)
-        .width('100%')
-        .fontSize(16)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#1F2A44')
-
-      Text(content)
-        .width('100%')
-        .fontSize(14)
-        .fontColor('#5E6D85')
-        .lineHeight(22)
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  private buildDifficultySection(levelNum: number) {
-    Column({ space: 8 }) {
-      Text('难度等级')
-        .width('100%')
-        .fontSize(16)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#1F2A44')
-
-      Row({ space: 6 }) {
-        ForEach(this.getDifficultyStars(levelNum), (star: string, index: number) => {
-          SymbolGlyph($r('sys.symbol.star_fill'))
-            .fontSize(18)
-            .fontColor(star === 'filled' ? ['#FFB938'] : ['#D6E0EE'])
-        }, (_star: string, index: number) => `${index}`)
-
-        Text(`Lv.${Math.max(1, Math.min(5, levelNum))}`)
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#7A8CA7')
-          .margin({ left: 6 })
-      }
-      .width('100%')
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  private buildTagSection(title: string, tags: string[], backgroundColor: string, textColor: string) {
-    Column({ space: 10 }) {
-      Text(title)
-        .width('100%')
-        .fontSize(16)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#1F2A44')
-
-      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start, alignItems: ItemAlign.Start }) {
-        ForEach(tags, (tag: string) => {
-          Text(tag)
-            .fontSize(12)
-            .fontColor(textColor)
-            .padding({ left: 10, right: 10, top: 7, bottom: 7 })
-            .backgroundColor(backgroundColor)
-            .borderRadius(12)
-            .margin({ right: 8, bottom: 8 })
-        }, (tag: string) => tag)
-      }
-      .width('100%')
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
