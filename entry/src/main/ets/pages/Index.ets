@@ -32,6 +32,7 @@ struct Index {
   @State profileView: string = 'main'
   @State notificationsEnabled: boolean = true
   @State vibrationEnabled: boolean = false
+  @State isTrainScoring: boolean = false
 
   private readonly smsApiBaseUrl: string = 'http://10.133.132.87:8501'
   private countdownTimer: number = -1
@@ -312,12 +313,16 @@ struct Index {
             this.selectedPhrase = phrase
           },
           onBackToCourseList: () => {
+            this.isTrainScoring = false
             this.trainView = 'courseList'
           },
           onCompleteTraining: () => {
             if (this.dailyProgress < 100) {
               this.dailyProgress = Math.min(100, this.dailyProgress + 10)
             }
+          },
+          onScoringStateChange: (isScoring: boolean) => {
+            this.isTrainScoring = isScoring
           }
         })
       }
@@ -396,37 +401,45 @@ struct Index {
         }
       })
     } else {
-      Column() {
-        if (!(this.currentTab === 1 && this.trainView === 'detail')) {
-          this.buildTopBar()
-        }
+      Stack({ alignContent: Alignment.Top }) {
+        Column() {
+          if (!(this.currentTab === 1 && this.trainView === 'detail')) {
+            this.buildTopBar()
+          }
 
-        if (this.currentTab === 1 && this.trainView === 'detail') {
+          if (this.currentTab === 1 && this.trainView === 'detail') {
           Column() {
             this.buildCurrentPage()
           }
           .width('100%')
           .layoutWeight(1)
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
         } else {
-          Scroll() {
-            Column() {
-              this.buildCurrentPage()
+            Scroll() {
+              Column() {
+                this.buildCurrentPage()
+              }
+              .width('100%')
             }
-            .width('100%')
+            .layoutWeight(1)
+            .scrollBar(BarState.Off)
           }
-          .layoutWeight(1)
-          .scrollBar(BarState.Off)
-        }
 
-        this.buildBottomNav()
+          if (!(this.currentTab === 1 && this.trainView === 'detail')) {
+            this.buildBottomNav()
+          }
+        }
+        .width('100%')
+        .height('100%')
+        .linearGradient({
+          angle: 180,
+          colors: [['#F7FAFE', 0], ['#EEF4FB', 1]]
+        })
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+
       }
       .width('100%')
       .height('100%')
-      .linearGradient({
-        angle: 180,
-        colors: [['#F7FAFE', 0], ['#EEF4FB', 1]]
-      })
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
   }
 }

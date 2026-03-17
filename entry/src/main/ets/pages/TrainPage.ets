@@ -1,6 +1,5 @@
-import { Want } from '@kit.AbilityKit'
-import common from '@ohos.app.ability.common'
-import photoAccessHelper from '@ohos.file.photoAccessHelper'
+﻿import photoAccessHelper from '@ohos.file.photoAccessHelper'
+import picker from '@ohos.file.picker'
 
 class MediaResourceItem {
   uid: string
@@ -78,13 +77,19 @@ export struct TrainPage {
   @State mockScore: number = 86
   @State recordedVideoUri: string = ''
   @State recordedAudioUri: string = ''
-  @State audioCaptureTip: string = '录音练习会尝试调用系统录音能力，录完后只保留本地结果。'
-  @State captureTip: string = '录像练习会调用系统相机，录完后只在本地预览，不会上传。'
+  @State audioCaptureTip: string = '已就绪，选一段音频开始跟读吧。'
+  @State captureTip: string = '已就绪，选一段视频开始练习吧。'
   @State isLaunchingVideoCapture: boolean = false
   @State isLaunchingAudioCapture: boolean = false
+  @State isScoring: boolean = false
+  @State demoAudioProgress: number = 0
+  @State isDemoAudioPlaying: boolean = false
+  @State demoAudioDurationSec: number = 9
+  @State demoAudioWaveTick: number = 0
   onSelectPhrase: (phrase: string) => void = () => {}
   onBackToCourseList: () => void = () => {}
   onCompleteTraining: () => void = () => {}
+  onScoringStateChange: (isScoring: boolean) => void = () => {}
 
   private introScroller: Scroller = new Scroller()
   private videoScroller: Scroller = new Scroller()
@@ -93,6 +98,9 @@ export struct TrainPage {
   private resultScroller: Scroller = new Scroller()
   private videoController: VideoController = new VideoController()
   private practiceVideoController: VideoController = new VideoController()
+  private demoAudioTimer: number = -1
+  private demoAudioStartAtMs: number = 0
+  private scoringTimer: number = -1
   private readonly fallbackCoverUrl: string = 'http://192.168.142.128:9001/hearbridge-bucket/20260316/3ad909fc0af94c58a8f2be4ca2fe4cbcChatGPT%20Image%202026%E5%B9%B43%E6%9C%8816%E6%97%A5%2001_25_49.png'
   private readonly trainingItems: TrainingItem[] = [
     new TrainingItem(
@@ -127,7 +135,7 @@ export struct TrainPage {
       ['先看口型再发音', '保持语速平稳'], ['尾音不清晰'],
       [new MediaResourceItem('v-cover-2', 'cover-voice-hello.png', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.png', 'done')],
       [new MediaResourceItem('v-video-2', '%E4%BD%A0%E5%A5%BD.mp4', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/7375fc2d133c4ffdb11ed159fefd7a24%E4%BD%A0%E5%A5%BD.mp4', 'done')],
-      [],
+      [new MediaResourceItem('v-audio-2', 'nihao.mp3', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.mp3', 'done')],
       [
         new MediaResourceItem(
           'v-step-1',
@@ -154,6 +162,12 @@ export struct TrainPage {
     this.syncCurrentItemFromSelection()
   }
 
+  aboutToDisappear() {
+    this.clearDemoAudioTimer()
+    this.clearScoringTimer()
+    this.setScoringState(false)
+  }
+
   private syncCurrentItemFromSelection() {
     const items: TrainingItem[] = this.getVisibleItems()
     this.currentItemIndex = 0
@@ -170,11 +184,109 @@ export struct TrainPage {
     this.currentStage = 'intro'
     this.practiceMode = this.trainingType === 'speech' ? 'audio' : 'video'
     this.isCapturing = false
+    this.setScoringState(false)
+    this.clearScoringTimer()
     this.mockScore = 86
     this.recordedVideoUri = ''
     this.recordedAudioUri = ''
-    this.audioCaptureTip = '录音练习会尝试调用系统录音能力，录完后只保留本地结果。'
-    this.captureTip = '录像练习会调用系统相机，录完后只在本地预览，不会上传。'
+    this.stopDemoAudioPlayback()
+    if (this.trainingType === 'speech') {
+      this.audioCaptureTip = '已就绪，选一段音频开始跟读吧。'
+      this.captureTip = '已就绪，选一段视频开始练习吧。'
+    } else {
+      this.audioCaptureTip = '当前是手势训练，请使用视频练习。'
+      this.captureTip = '已就绪，选一段手势视频开始练习吧。'
+    }
+  }
+
+  private clearDemoAudioTimer() {
+    if (this.demoAudioTimer !== -1) {
+      clearInterval(this.demoAudioTimer)
+      this.demoAudioTimer = -1
+    }
+  }
+
+  private clearScoringTimer() {
+    if (this.scoringTimer !== -1) {
+      clearTimeout(this.scoringTimer)
+      this.scoringTimer = -1
+    }
+  }
+
+  private setScoringState(isScoring: boolean) {
+    if (this.isScoring === isScoring) {
+      return
+    }
+    this.isScoring = isScoring
+    this.onScoringStateChange(isScoring)
+  }
+
+  private formatDuration(seconds: number): string {
+    const safe = Math.max(0, Math.floor(seconds))
+    const mm = Math.floor(safe / 60)
+    const ss = safe % 60
+    return `${mm < 10 ? '0' : ''}${mm}:${ss < 10 ? '0' : ''}${ss}`
+  }
+
+  private getDemoAudioProgressPercentText(): string {
+    if (this.demoAudioDurationSec <= 0) {
+      return '0%'
+    }
+    const raw = (this.demoAudioProgress / this.demoAudioDurationSec) * 100
+    const clamped = Math.min(100, Math.max(0, raw))
+    return `${clamped.toFixed(1)}%`
+  }
+
+  private applyDemoAudioDuration(durationSec: number) {
+    const safeDuration = Math.max(1, Math.floor(durationSec))
+    this.demoAudioDurationSec = safeDuration
+    if (this.demoAudioProgress > this.demoAudioDurationSec) {
+      this.demoAudioProgress = this.demoAudioDurationSec
+    }
+  }
+
+  private stopDemoAudioPlayback() {
+    this.clearDemoAudioTimer()
+    this.isDemoAudioPlaying = false
+    this.practiceVideoController.pause()
+  }
+
+  private startDemoAudioPlayback() {
+    if (this.isDemoAudioPlaying) {
+      return
+    }
+    this.clearDemoAudioTimer()
+    if (this.demoAudioProgress >= this.demoAudioDurationSec) {
+      this.demoAudioProgress = 0
+    }
+    this.demoAudioWaveTick = 0
+    // Resume from current progress instead of always restarting from zero.
+    this.demoAudioStartAtMs = Date.now() - Math.floor(this.demoAudioProgress * 1000)
+    this.isDemoAudioPlaying = true
+    this.practiceVideoController.start()
+    this.demoAudioTimer = setInterval(() => {
+      if (!this.isDemoAudioPlaying) {
+        this.clearDemoAudioTimer()
+        return
+      }
+      const elapsedSec = (Date.now() - this.demoAudioStartAtMs) / 1000
+      if (elapsedSec >= this.demoAudioDurationSec) {
+        this.demoAudioProgress = this.demoAudioDurationSec
+        this.stopDemoAudioPlayback()
+        return
+      }
+      this.demoAudioProgress = elapsedSec
+      this.demoAudioWaveTick = elapsedSec * 10
+    }, 50)
+  }
+
+  private getAudioWaveHeight(index: number): number {
+    if (!this.isDemoAudioPlaying) {
+      return 8
+    }
+    const phase = (this.demoAudioWaveTick * 0.26) + (index * 0.48)
+    const value = Math.abs(Math.sin(phase))
+    return 8 + Math.floor(value * 18)
   }
 
   private getVisibleItems(): TrainingItem[] {
@@ -300,6 +412,9 @@ export struct TrainPage {
   }
 
   private goToNextStage() {
+    if (this.isScoring) {
+      return
+    }
     if (this.currentStage === 'intro') {
       this.currentStage = this.hasVideo(this.getCurrentItem()) ? 'video' : 'guide'
       if (this.currentStage === 'video') {
@@ -325,6 +440,9 @@ export struct TrainPage {
   }
 
   private goToPreviousStage() {
+    if (this.isScoring) {
+      return
+    }
     if (this.currentStage === 'video') {
       this.currentStage = 'intro'
       this.scrollContentToTop()
@@ -393,45 +511,29 @@ export struct TrainPage {
   }
 
   private submitPractice() {
+    if (this.isScoring) {
+      return
+    }
     this.isCapturing = false
-    this.mockScore = this.trainingType === 'speech' ? 91 : 88
-    this.currentStage = 'result'
-    this.scrollContentToTop()
+    this.setScoringState(true)
+    this.clearScoringTimer()
+    this.scoringTimer = setTimeout(() => {
+      this.mockScore = this.trainingType === 'speech' ? 91 : 88
+      this.setScoringState(false)
+      this.currentStage = 'result'
+      this.scrollContentToTop()
+      this.scoringTimer = -1
+    }, 1800)
   }
 
-  private async openSystemVideoCapture() {
+  private async openLocalVideoPicker() {
     if (this.isLaunchingVideoCapture) {
       return
     }
 
     this.isLaunchingVideoCapture = true
-    this.captureTip = '正在打开系统相机录像...'
+    this.captureTip = '正在打开视频选择...'
 
-    try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const want: Want = {
-        action: 'ohos.want.action.videoCapture',
-        parameters: {
-          supportMultiMode: false
-        }
-      }
-      const result = await context.startAbilityForResult(want)
-      const localVideoUri = this.extractVideoUri(result)
-      if (localVideoUri.length > 0) {
-        this.recordedVideoUri = localVideoUri
-        this.captureTip = '录像已完成，文件只保存在本地预览状态，当前不会上传。'
-      } else {
-        this.captureTip = '录像已结束，但系统没有返回可预览的视频地址。'
-      }
-    } catch (_error) {
-      this.captureTip = '当前环境无法直接拉起系统相机，正在切换到本地视频选择。'
-      await this.openLocalVideoPicker()
-    } finally {
-      this.isLaunchingVideoCapture = false
-    }
-  }
-
-  private async openLocalVideoPicker() {
     try {
       let videoPicker = new photoAccessHelper.PhotoViewPicker()
       let pickerOptions = new photoAccessHelper.PhotoSelectOptions()
@@ -441,81 +543,43 @@ export struct TrainPage {
       const pickerResult = await videoPicker.select(pickerOptions)
       if (pickerResult.photoUris.length > 0) {
         this.recordedVideoUri = pickerResult.photoUris[0]
-        this.captureTip = '已选择本地视频，当前仅用于练习预览，不会上传。'
+        this.captureTip = '视频已就位，预览后继续闯关。'
       } else {
-        this.captureTip = '你还没有选择视频。'
+        this.captureTip = '还没选到视频，再挑一段试试。'
       }
     } catch (_pickerError) {
-      this.captureTip = '本地视频选择失败，请在真机或支持媒体库的模拟器中重试。'
+      this.captureTip = '这次没选成功，再试一次就好。'
+    } finally {
+      this.isLaunchingVideoCapture = false
     }
   }
 
-  private async openSystemAudioCapture() {
+  private async openLocalAudioPicker() {
     if (this.isLaunchingAudioCapture) {
       return
     }
 
     this.isLaunchingAudioCapture = true
-    this.audioCaptureTip = '正在打开系统录音...'
+    this.audioCaptureTip = '正在打开音频选择...'
 
     try {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const want: Want = {
-        action: 'ohos.want.action.audioCapture'
-      }
-      const result = await context.startAbilityForResult(want)
-      const localAudioUri = this.extractAudioUri(result)
-      if (localAudioUri.length > 0) {
-        this.recordedAudioUri = localAudioUri
-        this.audioCaptureTip = '录音已完成，当前仅保留本地结果，未上传。'
+      let documentPicker = new picker.DocumentViewPicker()
+      let documentSelectOptions = new picker.DocumentSelectOptions()
+      documentSelectOptions.maxSelectNumber = 1
+      documentSelectOptions.fileSuffixFilters = ['音频|.mp3,.m4a,.aac,.wav,.ogg,.flac']
+
+      const documentSelectResult = await documentPicker.select(documentSelectOptions) as Array<string>
+      if (documentSelectResult.length > 0) {
+        this.recordedAudioUri = documentSelectResult[0]
+        this.audioCaptureTip = '音频已就位，继续练习拿高分。'
       } else {
-        this.audioCaptureTip = '录音已结束，但系统没有返回可用的音频地址。'
+        this.audioCaptureTip = '还没选到音频，再挑一段试试。'
       }
-    } catch (_error) {
-      this.audioCaptureTip = '当前环境无法直接拉起系统录音，模拟器里可能不支持。'
+    } catch (_pickerError) {
+      this.audioCaptureTip = '这次没选成功，再试一次就好。'
     } finally {
       this.isLaunchingAudioCapture = false
     }
-  }
-
-  private extractVideoUri(result: common.AbilityResult): string {
-    const resourceUri = this.readResultParameter(result, 'resourceUri')
-    if (resourceUri.length > 0) {
-      return resourceUri
-    }
-
-    const uri = this.readResultParameter(result, 'uri')
-    if (uri.length > 0) {
-      return uri
-    }
-
-    return ''
-  }
-
-  private extractAudioUri(result: common.AbilityResult): string {
-    const resourceUri = this.readResultParameter(result, 'resourceUri')
-    if (resourceUri.length > 0) {
-      return resourceUri
-    }
-
-    const uri = this.readResultParameter(result, 'uri')
-    if (uri.length > 0) {
-      return uri
-    }
-
-    return ''
-  }
-
-  private readResultParameter(result: common.AbilityResult, key: string): string {
-    if (!result.want || !result.want.parameters) {
-      return ''
-    }
-
-    const rawValue = result.want.parameters[key]
-    if (rawValue === undefined || rawValue === null) {
-      return ''
-    }
-    return `${rawValue}`
   }
 
   private handleNextItem() {
@@ -538,6 +602,9 @@ export struct TrainPage {
 
   private getNextLabel(): string {
     if (this.currentStage === 'practice') {
+      if (this.isScoring) {
+        return '评分中...'
+      }
       return '评分'
     }
     if (this.currentStage === 'result') {
@@ -547,6 +614,9 @@ export struct TrainPage {
   }
 
   private handleFloatingNext() {
+    if (this.isScoring) {
+      return
+    }
     if (this.currentStage === 'result') {
       this.handleNextItem()
       return
@@ -568,24 +638,30 @@ export struct TrainPage {
             }
           }
           .width('100%')
-          .padding({ left: 16, right: 16, top: 6, bottom: 132 })
+          .padding({ left: 16, right: 16, top: 6, bottom: 16 })
         }
         .width('100%')
         .height('100%')
         .scrollBar(BarState.Off)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       } else if (this.currentStage === 'video') {
-        Column({ space: 16 }) {
-          Blank()
-            .height(106)
-          if (this.hasVisibleItems()) {
-            this.buildVideoStage(this.getCurrentItem())
-          } else {
-            this.buildEmptyState()
+        Scroll(this.videoScroller) {
+          Column({ space: 16 }) {
+            Blank()
+              .height(106)
+            if (this.hasVisibleItems()) {
+              this.buildVideoStage(this.getCurrentItem())
+            } else {
+              this.buildEmptyState()
+            }
           }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 6, bottom: 16 })
         }
         .width('100%')
         .height('100%')
-        .padding({ left: 16, right: 16, top: 6, bottom: 132 })
+        .scrollBar(BarState.Off)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       } else if (this.currentStage === 'guide') {
         Scroll(this.guideScroller) {
           Column({ space: 16 }) {
@@ -598,11 +674,12 @@ export struct TrainPage {
             }
           }
           .width('100%')
-          .padding({ left: 16, right: 16, top: 6, bottom: 132 })
+          .padding({ left: 16, right: 16, top: 6, bottom: 16 })
         }
         .width('100%')
         .height('100%')
         .scrollBar(BarState.Off)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       } else if (this.currentStage === 'practice') {
         Scroll(this.practiceScroller) {
           Column({ space: 16 }) {
@@ -615,11 +692,12 @@ export struct TrainPage {
             }
           }
           .width('100%')
-          .padding({ left: 16, right: 16, top: 6, bottom: 132 })
+          .padding({ left: 16, right: 16, top: 6, bottom: 16 })
         }
         .width('100%')
         .height('100%')
         .scrollBar(BarState.Off)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       } else {
         Scroll(this.resultScroller) {
           Column({ space: 16 }) {
@@ -632,13 +710,14 @@ export struct TrainPage {
             }
           }
           .width('100%')
-          .padding({ left: 16, right: 16, top: 6, bottom: 132 })
+          .padding({ left: 16, right: 16, top: 6, bottom: 16 })
           .backgroundColor('#F4F7FB')
         }
         .width('100%')
         .height('100%')
         .backgroundColor('#F4F7FB')
         .scrollBar(BarState.Off)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       }
 
       this.buildPreloadAssets(this.getCurrentItem())
@@ -651,10 +730,15 @@ export struct TrainPage {
       .padding({ left: 16, right: 16, top: 0, bottom: 10 })
       .backgroundColor('#FFFFFF')
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+
+      if (this.isScoring) {
+        this.buildScoringOverlay()
+      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor('#F4F7FB')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 
   @Builder
@@ -683,6 +767,44 @@ export struct TrainPage {
     .height(1)
     .clip(true)
     .position({ x: -9999, y: -9999 })
+  }
+
+  @Builder
+  private buildScoringOverlay() {
+    Stack({ alignContent: Alignment.Center }) {
+      Column() {
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor('#660B1522')
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+
+      Column({ space: 12 }) {
+        LoadingProgress()
+          .width(34)
+          .height(34)
+          .color('#2E79F4')
+
+        Text(this.trainingType === 'speech' ? 'AI 正在评估发音...' : 'AI 正在评估动作...')
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#1F2A44')
+
+        Text(this.trainingType === 'speech'
+          ? '正在分析发音清晰度、节奏稳定性和口型表现'
+          : '正在分析动作完整度、连贯性和关键姿态准确度')
+          .fontSize(12)
+          .fontColor('#6E7F98')
+      }
+      .padding({ left: 22, right: 22, top: 20, bottom: 20 })
+      .backgroundColor('#FFFFFF')
+      .borderRadius(18)
+      .border({ width: 1, color: '#E4ECF8' })
+    }
+    .width('100%')
+    .height('100%')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+    .zIndex(999)
   }
 
   @Builder
@@ -727,6 +849,8 @@ export struct TrainPage {
             .backgroundColor('#FFFFFF')
             .borderRadius(17)
             .padding({ left: 12, right: 12 })
+            .enabled(!this.isScoring)
+            .opacity(this.isScoring ? 0.45 : 1)
             .onClick(() => {
               this.goToPreviousStage()
             })
@@ -740,6 +864,8 @@ export struct TrainPage {
           .backgroundColor('#2E79F4')
           .borderRadius(17)
           .padding({ left: 12, right: 12 })
+          .enabled(!this.isScoring)
+          .opacity(this.isScoring ? 0.55 : 1)
           .onClick(() => {
             this.handleFloatingNext()
           })
@@ -888,91 +1014,260 @@ export struct TrainPage {
     .width('100%')
   }
 
-  @Builder
+    @Builder
   private buildPracticeStage(item: TrainingItem) {
     Column({ space: 16 }) {
-      Row({ space: 10 }) {
-        this.buildPracticeChip('audio', '录音练习', this.practiceMode === 'audio')
-        this.buildPracticeChip('video', '录像练习', this.practiceMode === 'video')
+      if (this.trainingType === 'speech') {
+        Row({ space: 10 }) {
+          this.buildPracticeModeCard('audio', '录音练习', '音')
+          this.buildPracticeModeCard('video', '录像练习', '视')
+        }
+        .width('100%')
       }
-      .width('100%')
 
       Column({ space: 14 }) {
         Row({ space: 8 }) {
-          Text(this.practiceMode === 'audio' ? '音频模式' : '视频模式')
+          Text(this.trainingType === 'speech'
+            ? (this.practiceMode === 'audio' ? '音频跟读' : '视频跟练')
+            : '手势跟练')
             .fontSize(11)
             .fontColor('#2E79F4')
             .padding({ left: 10, right: 10, top: 6, bottom: 6 })
             .backgroundColor('#EEF5FF')
             .borderRadius(12)
 
-          Text(this.practiceMode === 'audio' ? '适合跟读与发音评分' : '适合动作与口型纠正')
+          Text(this.trainingType === 'speech'
+            ? (this.practiceMode === 'audio' ? '发音节奏' : '口型动作')
+            : '动作评估')
             .fontSize(11)
             .fontColor('#7A8CA7')
         }
         .width('100%')
 
-        Text(this.practiceMode === 'audio' ? '先听示范，再开始录音' : '打开前置摄像头，按动作或口型练习')
+        if (this.trainingType === 'speech' && this.practiceMode === 'audio' && this.hasAudio(item)) {
+          Text('先听示范，模仿更准')
+            .width('100%')
+            .fontSize(18)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#1F2A44')
+
+          Column({ space: 10 }) {
+            Row() {
+              Column({ space: 4 }) {
+                Text('点右侧播放键，先完整听一遍示范发音')
+                  .fontSize(11)
+                  .fontColor('#7A8CA7')
+              }
+              .alignItems(HorizontalAlign.Start)
+
+              Blank()
+
+              Row() {
+                Button() {
+                  SymbolGlyph(this.isDemoAudioPlaying ? $r('sys.symbol.pause_fill') : $r('sys.symbol.play_fill'))
+                    .fontSize(16)
+                    .fontColor(['#2E79F4'])
+                }
+                  .width(36)
+                  .height(30)
+                  .backgroundColor('#EEF5FF')
+                  .border({ width: 1, color: '#D8E6FB' })
+                  .borderRadius(10)
+                  .onClick(() => {
+                    if (this.isDemoAudioPlaying) {
+                      this.stopDemoAudioPlayback()
+                    } else {
+                      this.startDemoAudioPlayback()
+                    }
+                  })
+              }
+            }
+            .width('100%')
+
+            Column({ space: 8 }) {
+              Stack({ alignContent: Alignment.Start }) {
+                Row() {
+                }
+                .width('100%')
+                .height(8)
+                .backgroundColor('#D8E6FB')
+                .borderRadius(4)
+
+                Row() {
+                }
+                .width(this.getDemoAudioProgressPercentText())
+                .height(8)
+                .backgroundColor('#2E79F4')
+                .borderRadius(4)
+              }
+              .width('100%')
+
+              Row() {
+                Text(this.formatDuration(this.demoAudioProgress))
+                  .fontSize(11)
+                  .fontColor('#6E7F98')
+
+                Blank()
+
+                Text(this.formatDuration(this.demoAudioDurationSec))
+                  .fontSize(11)
+                  .fontColor('#9AA8BD')
+              }
+              .width('100%')
+
+              Row({ space: 6 }) {
+                ForEach([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], (bar: number) => {
+                  Column() {
+                  }
+                  .layoutWeight(1)
+                  .height(this.getAudioWaveHeight(bar))
+                  .borderRadius(4)
+                  .backgroundColor(this.isDemoAudioPlaying ? '#58A6FF' : '#D7E6FB')
+                }, (bar: number) => `${bar}`)
+              }
+              .width('100%')
+              .height(24)
+              .alignItems(VerticalAlign.Bottom)
+            }
+            .width('100%')
+
+            Text('听完示范后上传你的跟读音频，系统会从清晰度和节奏给你反馈。')
+              .width('100%')
+              .fontSize(11)
+              .lineHeight(18)
+              .fontColor('#5F7593')
+
+            // Keep audio player hidden and controlled by buttons.
+            Video({
+              src: item.audio[0].url,
+              controller: this.practiceVideoController
+            })
+              .width(1)
+              .height(1)
+              .controls(false)
+              .autoPlay(false)
+              .opacity(0.01)
+              .loop(false)
+              .onPrepared((event) => {
+                if (event && event.duration > 0) {
+                  this.applyDemoAudioDuration(event.duration)
+                }
+              })
+              .onFinish(() => {
+                this.demoAudioProgress = this.demoAudioDurationSec
+                this.stopDemoAudioPlayback()
+              })
+          }
+          .width('100%')
+          .padding(12)
+          .backgroundColor('#FFFFFF')
+          .borderRadius(12)
+          .border({ width: 1, color: '#E6EDF8' })
+        }
+
+        Text(this.trainingType === 'speech'
+          ? (this.practiceMode === 'audio' ? '上传你的跟读音频' : '上传你的口语练习视频')
+          : '上传你的手势练习视频')
           .width('100%')
           .fontSize(18)
           .fontWeight(FontWeight.Medium)
           .fontColor('#1F2A44')
 
-        Text(this.practiceMode === 'audio'
-          ? (this.hasAudio(item) ? '当前训练项已挂载音频资源，可用于跟读练习。' : '当前训练项没有音频资源，先按步骤练习后再录音。')
-          : '录像模式更适合手势与口型动作校验。')
+        Text(this.trainingType === 'speech'
+          ? (this.practiceMode === 'audio'
+            ? (this.hasAudio(item) ? '先听示范，再录一遍，你会更容易拿到高分。' : '没有示范也没关系，直接上传你的练习音频即可。')
+            : '建议横屏拍摄，口型清晰、语速稳定，评分会更准确。')
+          : '请完整拍到手部和上半身动作，评估结果会更稳定。')
           .width('100%')
           .fontSize(13)
           .fontColor('#7A8CA7')
           .lineHeight(20)
 
-        Stack({ alignContent: Alignment.Center }) {
-          Column() {
+        if (this.trainingType === 'speech' && this.practiceMode === 'audio') {
+          Column({ space: 12 }) {
+            Column({ space: 10 }) {
+              Button('选择本地音频')
+                .width(168)
+                .height(44)
+                .fontSize(15)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#FFFFFF')
+                .backgroundColor('#2E79F4')
+                .borderRadius(14)
+                .onClick(() => {
+                  this.openLocalAudioPicker()
+                })
+
+              if (this.recordedAudioUri.length > 0) {
+                Text('已选好音频，继续加油')
+                  .width('100%')
+                  .fontSize(12)
+                  .fontColor('#5F7593')
+              }
+            }
+            .alignItems(HorizontalAlign.Start)
+            .width('100%')
+            .padding(12)
+            .backgroundColor('#FFFFFF')
+            .borderRadius(12)
+            .border({ width: 1, color: '#E6EDF8' })
+          }
+          .alignItems(HorizontalAlign.Start)
+          .width('100%')
+          .padding(16)
+          .backgroundColor('#F7FAFE')
+          .borderRadius(16)
+          .border({ width: 1, color: '#E4ECF8' })
+        } else {
+          Stack({ alignContent: Alignment.Center }) {
+            Column() {
+            }
+            .width('100%')
+            .height(220)
+            .backgroundColor('#0D1B2A')
+            .borderRadius(20)
+
+            Column({ space: 14 }) {
+              Text(this.trainingType === 'speech' ? '选好视频后，就能进入评分' : '选好手势视频后，就能进入评分')
+                .fontSize(20)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#FFFFFF')
+
+              Button(this.trainingType === 'speech' ? '选择本地视频' : '选择手势视频')
+                .width(160)
+                .height(46)
+                .fontSize(15)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#0B1522')
+                .backgroundColor('#FFFFFF')
+                .borderRadius(16)
+                .onClick(() => {
+                  this.openLocalVideoPicker()
+                })
+            }
           }
           .width('100%')
           .height(220)
-          .backgroundColor('#0D1B2A')
-          .borderRadius(20)
-
-          Column({ space: 14 }) {
-            Text(this.isCapturing ? '练习采集中...' : this.practiceMode === 'audio' ? '准备开始录音' : '准备开始录像')
-              .fontSize(20)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#FFFFFF')
-
-            Button(this.isCapturing ? '结束采集' : this.practiceMode === 'audio' ? '开始录音' : '开始录像')
-              .width(160)
-              .height(46)
-              .fontSize(15)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#0B1522')
-              .backgroundColor('#FFFFFF')
-              .borderRadius(16)
-              .onClick(() => {
-                if (this.practiceMode === 'audio') {
-                  this.openSystemAudioCapture()
-                } else {
-                  this.openSystemVideoCapture()
-                }
-              })
-          }
         }
-        .width('100%')
-        .height(220)
 
-        Text(this.practiceMode === 'audio' ? this.audioCaptureTip : this.captureTip)
+        Text(this.trainingType === 'speech' && this.practiceMode === 'audio' ? this.audioCaptureTip : this.captureTip)
           .width('100%')
           .fontSize(12)
           .fontColor('#7A8CA7')
           .lineHeight(18)
 
-        if (this.practiceMode === 'audio' && this.recordedAudioUri.length > 0) {
-          Text(`已录音：${this.recordedAudioUri}`)
+        if ((this.trainingType !== 'speech' || this.practiceMode === 'video') && this.recordedVideoUri.length > 0) {
+          Video({
+            src: this.recordedVideoUri,
+            controller: this.practiceVideoController
+          })
             .width('100%')
-            .fontSize(11)
-            .fontColor('#9AA8BD')
-            .maxLines(2)
-          }
+            .height(220)
+            .objectFit(ImageFit.Contain)
+            .controls(true)
+            .autoPlay(false)
+            .borderRadius(20)
+        }
       }
       .width('100%')
       .padding(18)
@@ -981,6 +1276,52 @@ export struct TrainPage {
       .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
     }
     .width('100%')
+  }
+
+  @Builder
+  private buildPracticeModeCard(mode: string, label: string, shortLabel: string) {
+    Column({ space: 10 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Row() {
+        }
+        .width(34)
+        .height(34)
+        .backgroundColor(this.practiceMode === mode ? '#FFFFFFEB' : '#EFF4FC')
+        .borderRadius(12)
+        .border({ width: 1, color: this.practiceMode === mode ? '#FFFFFF70' : '#D4DFEF' })
+
+        Text(shortLabel)
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.practiceMode === mode ? '#2E79F4' : '#5F7593')
+      }
+      .width(34)
+      .height(34)
+
+      Text(label)
+        .fontSize(14)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.practiceMode === mode ? '#FFFFFF' : '#4F6280')
+    }
+    .justifyContent(FlexAlign.Center)
+    .layoutWeight(1)
+    .height(92)
+    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+    .linearGradient({
+      angle: 135,
+      colors: this.practiceMode === mode ? [['#5BA9FF', 0], ['#2E79F4', 1]] : [['#F4F8FE', 0], ['#EAF1FB', 1]]
+    })
+    .borderRadius(20)
+    .border({ width: 1, color: this.practiceMode === mode ? '#2E79F400' : '#DCE6F4' })
+    .shadow({
+      radius: this.practiceMode === mode ? 16 : 8,
+      color: this.practiceMode === mode ? '#2E79F43D' : '#1D355012',
+      offsetX: 0,
+      offsetY: this.practiceMode === mode ? 8 : 4
+    })
+    .onClick(() => {
+      this.practiceMode = mode
+    })
   }
 
   @Builder
@@ -1174,13 +1515,23 @@ export struct TrainPage {
 
   @Builder
   private buildPracticeChip(mode: string, label: string, active: boolean) {
-    Text(label)
+    Button(label)
+      .type(ButtonType.Normal)
+      .stateEffect(true)
       .fontSize(13)
-      .fontWeight(active ? FontWeight.Medium : FontWeight.Regular)
-      .fontColor(active ? '#2563EB' : '#607089')
+      .fontWeight(active ? FontWeight.Bold : FontWeight.Medium)
+      .fontColor(active ? '#FFFFFF' : '#607089')
+      .height(40)
       .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-      .backgroundColor(active ? '#E7F0FF' : '#FFFFFF')
+      .backgroundColor(active ? '#2E79F4' : '#FFFFFF')
       .borderRadius(16)
+      .border({ width: 1, color: active ? '#2E79F4' : '#DCE7F6' })
+      .shadow({
+        radius: active ? 12 : 0,
+        color: active ? '#2E79F433' : '#00000000',
+        offsetX: 0,
+        offsetY: 4
+      })
       .onClick(() => {
         this.practiceMode = mode
       })
@@ -1618,3 +1969,7 @@ export struct TrainPage {
     .borderRadius(18)
   }
 }
+
+
+
+
