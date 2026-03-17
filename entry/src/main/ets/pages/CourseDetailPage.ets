@@ -21,23 +21,49 @@ export struct CourseDetailPage {
 
   private readonly trainingItems: TrainingItem[] = getMockTrainingItems()
   private readonly fallbackCoverUrl: string = FALLBACK_COVER_URL
+  private readonly pageScroller: Scroller = new Scroller()
 
   build() {
-    Column({ space: 14 }) {
+    Column() {
       this.buildHeader()
-      this.buildHeroCard()
-      this.buildCourseMetaSection(this.getCourseItemCount(), this.getProgressText())
-      this.buildActionRow(this.getNextPhrase(), this.getCanContinue())
-      CourseTrainingItemList({
-        items: this.getCourseTrainingItems(),
-        completedCount: this.getMockCompletedCount(this.getCourseItemCount()),
-        onItemClick: (itemName: string, completed: boolean) => {
-          this.onOpenTrainingItem(itemName, completed)
+
+      Scroll(this.pageScroller) {
+        Column({ space: 14 }) {
+          this.buildHeroCard()
+          this.buildCourseMetaSection(this.getCourseItemCount(), this.getProgressText())
+          this.buildActionRow(this.getNextPhrase(), this.getCanContinue())
+
+          CourseTrainingItemList({
+            items: this.getCourseTrainingItems(),
+            completedCount: this.getMockCompletedCount(this.getCourseItemCount()),
+            showHeader: true,
+            onItemClick: (itemName: string, completed: boolean) => {
+              this.onOpenTrainingItem(itemName, completed)
+            }
+          })
         }
+        .width('100%')
+        .justifyContent(FlexAlign.Start)
+        .alignItems(HorizontalAlign.Start)
+        .constraintSize({ minHeight: '100%' })
+        .justifyContent(FlexAlign.Start)
+        .alignItems(HorizontalAlign.Start)
+        .padding({ left: 16, right: 16, top: 8, bottom: 0 })
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .scrollBar(BarState.Off)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+      .onAppear(() => {
+        this.pageScroller.scrollTo({ xOffset: 0, yOffset: 0 })
       })
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 8, bottom: 20 })
+    .height('100%')
+    .justifyContent(FlexAlign.Start)
+    .alignItems(HorizontalAlign.Start)
+    .backgroundColor('#FFFFFF')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 
   @Builder
@@ -63,6 +89,9 @@ export struct CourseDetailPage {
         .fontColor('#1F2A44')
     }
     .width('100%')
+    .padding({ left: 16, right: 16, top: 8, bottom: 10 })
+    .backgroundColor('#FFFFFF')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
   @Builder
@@ -142,6 +171,8 @@ export struct CourseDetailPage {
       }
     }
     .width('100%')
+    .justifyContent(FlexAlign.Start)
+    .alignItems(HorizontalAlign.Start)
   }
 
   @Builder

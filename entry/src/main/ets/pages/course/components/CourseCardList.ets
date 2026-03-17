@@ -91,7 +91,7 @@ export struct CourseCardList {
 
       Column({ space: 8 }) {
         Row({ space: 8 }) {
-          Text(course.courseName)
+          Text(this.getCardTitle(course.courseName))
             .layoutWeight(1)
             .fontSize(19)
             .fontWeight(FontWeight.Medium)
@@ -113,6 +113,16 @@ export struct CourseCardList {
           })
         }
         .width('100%')
+
+        Row({ space: 4 }) {
+          SymbolGlyph($r('sys.symbol.flame'))
+            .fontSize(12)
+            .fontColor(['#2E79F4'])
+
+          Text(`热度 ${course.learningCount} 人次`)
+            .fontSize(11)
+            .fontColor('#6D7F99')
+        }
 
         Text(course.intro)
           .fontSize(12)
@@ -139,7 +149,7 @@ export struct CourseCardList {
       .margin({ left: 2 })
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 18, bottom: 18 })
+    .padding({ left: 14, right: 14, top: 12, bottom: 12 })
     .backgroundColor('#FFFFFF')
     .borderRadius(18)
     .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
@@ -166,5 +176,12 @@ export struct CourseCardList {
       tags.push(course.tag2)
     }
     return tags
+  }
+
+  private getCardTitle(title: string): string {
+    if (title.length <= 6) {
+      return title
+    }
+    return `${title.substring(0, 6)}...`
   }
 }

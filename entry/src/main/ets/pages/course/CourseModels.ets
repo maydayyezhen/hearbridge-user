@@ -7,6 +7,7 @@ export class CourseItem {
   sortNum: number
   status: number
   trainingType: string
+  learningCount: number
   tag1: string
   tag2: string
   tag3: string
@@ -20,6 +21,7 @@ export class CourseItem {
     sortNum: number,
     status: number,
     trainingType: string,
+    learningCount: number,
     tag1: string,
     tag2: string,
     tag3: string
@@ -32,6 +34,7 @@ export class CourseItem {
     this.sortNum = sortNum
     this.status = status
     this.trainingType = trainingType
+    this.learningCount = learningCount
     this.tag1 = tag1
     this.tag2 = tag2
     this.tag3 = tag3

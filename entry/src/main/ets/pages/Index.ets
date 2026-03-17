@@ -6,7 +6,7 @@ import { CourseListPage } from './CourseListPage'
 import { HomePage } from './HomePage'
 import { LoginPage } from './LoginPage'
 import { ProfilePage } from './ProfilePage'
-import { RecordPage } from './RecordPage'
+import { RecordPage, RecentCourseItem } from './RecordPage'
 import { TrainPage } from './TrainPage'
 
 @Entry
@@ -30,6 +30,8 @@ struct Index {
   @State selectedCourseCoverUrl: string = 'http://192.168.142.128:9001/hearbridge-bucket/20260316/3ad909fc0af94c58a8f2be4ca2fe4cbcChatGPT%20Image%202026%E5%B9%B43%E6%9C%8816%E6%97%A5%2001_25_49.png'
   @State currentTrainingType: string = 'gesture'
   @State trainView: string = 'courseList'
+  @State trainDetailCourseCode: string = ''
+  @State recordDetailCourseCode: string = ''
   @State selectedFilter: string = '周'
   @State selectedGoal: string = '日常交流'
   @State selectedTheme: string = '海盐蓝'
@@ -38,6 +40,10 @@ struct Index {
   @State vibrationEnabled: boolean = false
   @State isTrainScoring: boolean = false
   @State favoriteCourseCodes: string[] = []
+  @State recentCourses: RecentCourseItem[] = [
+    new RecentCourseItem('COURSE-301', '声母训练入门', '03-17 22:05', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/smxlrm.png', 68),
+    new RecentCourseItem('COURSE-101', '日常问候入门', '03-17 20:41', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/3ad909fc0af94c58a8f2be4ca2fe4cbcChatGPT%20Image%202026%E5%B9%B43%E6%9C%8816%E6%97%A5%2001_25_49.png', 42)
+  ]
 
   private readonly smsApiBaseUrl: string = 'http://10.133.132.87:8501'
   private countdownTimer: number = -1
@@ -200,6 +206,88 @@ struct Index {
     this.favoriteCourseCodes = next
   }
 
+  private formatNow(): string {
+    const now = new Date()
+    const month = `${now.getMonth() + 1}`.padStart(2, '0')
+    const day = `${now.getDate()}`.padStart(2, '0')
+    const hour = `${now.getHours()}`.padStart(2, '0')
+    const minute = `${now.getMinutes()}`.padStart(2, '0')
+    return `${month}-${day} ${hour}:${minute}`
+  }
+
+  private getCourseCoverUrl(courseCode: string): string {
+    if (courseCode === 'COURSE-301') {
+      return 'http://192.168.142.128:9001/hearbridge-bucket/20260316/smxlrm.png'
+    }
+    if (courseCode === 'COURSE-101') {
+      return 'http://192.168.142.128:9001/hearbridge-bucket/20260316/3ad909fc0af94c58a8f2be4ca2fe4cbcChatGPT%20Image%202026%E5%B9%B43%E6%9C%8816%E6%97%A5%2001_25_49.png'
+    }
+    return `https://placehold.co/400x240/png?text=${courseCode}`
+  }
+
+  private getCurrentProgress(courseCode: string): number {
+    for (let i = 0; i < this.recentCourses.length; i += 1) {
+      if (this.recentCourses[i].courseCode === courseCode) {
+        return this.recentCourses[i].progressPercent
+      }
+    }
+    return 15
+  }
+
+  private upsertRecentCourse(courseCode: string, courseName: string, progressDelta: number = 0) {
+    const nextProgress = Math.min(100, this.getCurrentProgress(courseCode) + progressDelta)
+    const next: RecentCourseItem[] = [
+      new RecentCourseItem(courseCode, courseName, this.formatNow(), this.getCourseCoverUrl(courseCode), nextProgress)
+    ]
+    for (let i = 0; i < this.recentCourses.length; i += 1) {
+      if (this.recentCourses[i].courseCode !== courseCode) {
+        next.push(this.recentCourses[i])
+      }
+    }
+    this.recentCourses = next
+  }
+
+  private openCourseDetailFromRecord(courseCode: string) {
+    this.selectedCourseCode = courseCode
+    this.selectedCourseName = this.getCourseNameByCode(courseCode)
+    this.selectedCourseCoverUrl = this.getCourseCoverUrl(courseCode)
+    this.selectedCourseIntro = this.getCourseIntroByCode(courseCode)
+    this.currentTrainingType = this.getCourseTrainingTypeByCode(courseCode)
+    this.recordDetailCourseCode = courseCode
+  }
+
+  private getCourseNameByCode(courseCode: string): string {
+    for (let i = 0; i < this.recentCourses.length; i += 1) {
+      if (this.recentCourses[i].courseCode === courseCode) {
+        return this.recentCourses[i].courseName
+      }
+    }
+    if (courseCode === 'COURSE-301') {
+      return '声母训练入门'
+    }
+    if (courseCode === 'COURSE-101') {
+      return '日常问候入门'
+    }
+    return courseCode
+  }
+
+  private getCourseTrainingTypeByCode(courseCode: string): string {
+    if (courseCode === 'COURSE-301' || courseCode === 'COURSE-302') {
+      return 'speech'
+    }
+    return 'gesture'
+  }
+
+  private getCourseIntroByCode(courseCode: string): string {
+    if (courseCode === 'COURSE-301') {
+      return '本课程围绕声母训练入门，提供从口型控制到跟读输出的循序训练路径。'
+    }
+    if (courseCode === 'COURSE-101') {
+      return '用于基础问候表达训练，帮助建立日常交流的起步能力。'
+    }
+    return '课程详情将由后端接口返回后动态渲染。'
+  }
+
   @Builder
   private buildTopBar() {
     Row() {
@@ -320,6 +408,30 @@ struct Index {
       })
     } else if (this.currentTab === 1) {
       if (this.trainView === 'courseList') {
+        if (this.trainDetailCourseCode.length > 0) {
+          CourseDetailPage({
+            courseName: this.selectedCourseName,
+            courseCode: this.selectedCourseCode,
+            courseIntro: this.selectedCourseIntro,
+            coverUrl: this.selectedCourseCoverUrl,
+            trainingType: this.currentTrainingType,
+            courseTag1: '',
+            courseTag2: '',
+            courseTag3: '',
+            isCourseFavorited: this.isCourseFavorited(this.selectedCourseCode),
+            onBack: () => {
+              this.trainDetailCourseCode = ''
+            },
+            onToggleFavorite: (courseCode: string) => {
+              this.toggleCourseFavorite(courseCode)
+            },
+            onOpenTrainingItem: (phrase: string, toResult: boolean) => {
+              this.selectedPhrase = phrase
+              this.selectedTrainEntryStage = toResult ? 'result' : 'intro'
+              this.trainView = 'detail'
+            }
+          })
+        } else {
         CourseListPage({
           trainingType: this.currentTrainingType,
           favoriteCourseCodes: this.favoriteCourseCodes,
@@ -332,13 +444,18 @@ struct Index {
           onOpenCourse: (courseName: string, courseCode: string, phrase: string, toResult: boolean) => {
             this.selectedCourseName = courseName
             this.selectedCourseCode = courseCode
+            this.upsertRecentCourse(courseCode, courseName)
             this.selectedPhrase = this.currentTrainingType === 'speech' ? '阿' : '你好'
             this.selectedPhrase = courseCode === 'COURSE-301' ? '浣犲ソ' : this.selectedPhrase
             this.selectedPhrase = phrase
             this.selectedTrainEntryStage = toResult ? 'result' : 'intro'
-            this.trainView = 'detail'
+            this.selectedCourseCoverUrl = this.getCourseCoverUrl(courseCode)
+            this.selectedCourseIntro = this.getCourseIntroByCode(courseCode)
+            this.currentTrainingType = this.getCourseTrainingTypeByCode(courseCode)
+            this.trainDetailCourseCode = courseCode
           }
         })
+        }
       } else {
         TrainPage({
           courseName: this.selectedCourseName,
@@ -356,11 +473,13 @@ struct Index {
           onBackToCourseList: () => {
             this.isTrainScoring = false
             this.trainView = 'courseList'
+            this.trainDetailCourseCode = ''
           },
           onCompleteTraining: () => {
             if (this.dailyProgress < 100) {
               this.dailyProgress = Math.min(100, this.dailyProgress + 10)
             }
+            this.upsertRecentCourse(this.selectedCourseCode, this.selectedCourseName, 10)
           },
           onScoringStateChange: (isScoring: boolean) => {
             this.isTrainScoring = isScoring
@@ -368,17 +487,47 @@ struct Index {
         })
       }
     } else if (this.currentTab === 2) {
-      RecordPage({
-        dailyProgress: this.dailyProgress,
-        selectedFilter: this.selectedFilter,
-        onFilterChange: (filter: string) => {
-          this.selectedFilter = filter
-        },
-        onOpenTraining: () => {
-          this.trainView = 'courseList'
-          this.currentTab = 1
-        }
-      })
+      if (this.recordDetailCourseCode.length > 0) {
+        CourseDetailPage({
+          courseName: this.selectedCourseName,
+          courseCode: this.selectedCourseCode,
+          courseIntro: this.selectedCourseIntro,
+          coverUrl: this.selectedCourseCoverUrl,
+          trainingType: this.currentTrainingType,
+          courseTag1: '',
+          courseTag2: '',
+          courseTag3: '',
+          isCourseFavorited: this.isCourseFavorited(this.selectedCourseCode),
+          onBack: () => {
+            this.recordDetailCourseCode = ''
+          },
+          onToggleFavorite: (courseCode: string) => {
+            this.toggleCourseFavorite(courseCode)
+          },
+          onOpenTrainingItem: (phrase: string, toResult: boolean) => {
+            this.selectedPhrase = phrase
+            this.selectedTrainEntryStage = toResult ? 'result' : 'intro'
+            this.trainView = 'detail'
+            this.currentTab = 1
+          }
+        })
+      } else {
+        RecordPage({
+          dailyProgress: this.dailyProgress,
+          selectedFilter: this.selectedFilter,
+          recentCourses: this.recentCourses,
+          onFilterChange: (filter: string) => {
+            this.selectedFilter = filter
+          },
+          onOpenRecentCourse: (courseCode: string) => {
+            this.openCourseDetailFromRecord(courseCode)
+          },
+          onOpenTraining: () => {
+            this.trainView = 'courseList'
+            this.currentTab = 1
+          }
+        })
+      }
     } else {
       ProfilePage({
         currentView: this.profileView,
@@ -396,8 +545,11 @@ struct Index {
         onOpenAccountSecurity: () => {
           this.profileView = 'accountSecurity'
         },
+        onOpenAccountProfile: () => {
+          this.profileView = 'accountProfile'
+        },
         onBackToSettings: () => {
-          this.profileView = 'settings'
+          this.profileView = 'main'
         },
         onGoalChange: (goal: string) => {
           this.selectedGoal = goal
@@ -444,7 +596,7 @@ struct Index {
     } else {
       Stack({ alignContent: Alignment.Top }) {
         Column() {
-          if (this.currentTab !== 1) {
+          if (this.currentTab !== 1 && !(this.currentTab === 2 && this.recordDetailCourseCode.length > 0)) {
             this.buildTopBar()
           }
 
@@ -454,24 +606,49 @@ struct Index {
             }
             .width('100%')
             .layoutWeight(1)
+            .justifyContent(FlexAlign.Start)
+            .alignItems(HorizontalAlign.Start)
             .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+          } else if (this.currentTab === 2 && this.recordDetailCourseCode.length > 0) {
+            Column() {
+              this.buildCurrentPage()
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Start)
+            .alignItems(HorizontalAlign.Start)
+            .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+          } else if (this.currentTab === 3) {
+            Column() {
+              this.buildCurrentPage()
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Start)
+            .alignItems(HorizontalAlign.Start)
           } else {
             Scroll() {
               Column() {
                 this.buildCurrentPage()
               }
               .width('100%')
+              .justifyContent(FlexAlign.Start)
+              .alignItems(HorizontalAlign.Start)
             }
             .layoutWeight(1)
             .scrollBar(BarState.Off)
           }
 
-          if (!(this.currentTab === 1 && this.trainView === 'detail')) {
+          if (!(this.currentTab === 1 && this.trainView === 'detail') &&
+            !(this.currentTab === 1 && this.trainDetailCourseCode.length > 0) &&
+            !(this.currentTab === 2 && this.recordDetailCourseCode.length > 0)) {
             this.buildBottomNav()
           }
         }
         .width('100%')
         .height('100%')
+        .justifyContent(FlexAlign.Start)
+        .alignItems(HorizontalAlign.Start)
         .linearGradient({
           angle: 180,
           colors: [['#F7FAFE', 0], ['#EEF4FB', 1]]

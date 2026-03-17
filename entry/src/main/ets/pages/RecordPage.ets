@@ -1,12 +1,22 @@
-class RecordItem {
-  date: string
-  title: string
-  duration: string
+export class RecentCourseItem {
+  courseCode: string
+  courseName: string
+  lastLearnedAt: string
+  coverUrl: string
+  progressPercent: number
 
-  constructor(date: string, title: string, duration: string) {
-    this.date = date
-    this.title = title
-    this.duration = duration
+  constructor(
+    courseCode: string,
+    courseName: string,
+    lastLearnedAt: string,
+    coverUrl: string,
+    progressPercent: number
+  ) {
+    this.courseCode = courseCode
+    this.courseName = courseName
+    this.lastLearnedAt = lastLearnedAt
+    this.coverUrl = coverUrl
+    this.progressPercent = progressPercent
   }
 }
 
@@ -14,15 +24,13 @@ class RecordItem {
 export struct RecordPage {
   @Prop dailyProgress: number = 0
   @Prop selectedFilter: string = '周'
+  @Prop recentCourses: RecentCourseItem[] = []
   onFilterChange: (filter: string) => void = () => {}
   onOpenTraining: () => void = () => {}
+  onOpenRecentCourse: (courseCode: string) => void = (_courseCode: string) => {}
 
   private readonly filters: string[] = ['周', '月', '总览']
   private readonly trendPoints: number[] = [30, 42, 36, 51, 47, 58, 64]
-  private readonly recordItems: RecordItem[] = [
-    new RecordItem('4月15日', '日常问候训练', '12 分钟'),
-    new RecordItem('4月12日', '口型临摹练习', '8 分钟')
-  ]
 
   build() {
     Column({ space: 18 }) {
@@ -59,7 +67,7 @@ export struct RecordPage {
       }
       .width('100%')
 
-      Text('建议：跟随范例再做一轮，准确度会更稳定。')
+      Text('建议：跟随示例再做一轮，准确度会更稳定。')
         .width('100%')
         .fontSize(13)
         .fontColor('#E5F1FF')
@@ -126,7 +134,7 @@ export struct RecordPage {
               angle: 180,
               colors: [['#68D5F3', 0], ['#3E7CF6', 1]]
             })
-            .borderRadius({ topLeft: 10, topRight: 10, bottomLeft: 10, bottomRight: 10 })
+            .borderRadius(10)
           }
           .justifyContent(FlexAlign.End)
           .layoutWeight(1)
@@ -147,51 +155,112 @@ export struct RecordPage {
   private buildHistoryCard() {
     Column({ space: 12 }) {
       Row() {
-        Text('历史记录')
+        Text('最近学习课程')
           .fontSize(18)
           .fontWeight(FontWeight.Medium)
           .fontColor('#1F2A44')
 
         Blank()
 
-        Text('...')
-          .fontSize(18)
-          .fontWeight(FontWeight.Bold)
+        Text(`${this.recentCourses.length} 条`)
+          .fontSize(13)
           .fontColor('#8AA3C3')
       }
       .width('100%')
 
-      ForEach(this.recordItems, (item: RecordItem) => {
-        Row() {
-          Column({ space: 4 }) {
-            Text(item.date)
-              .fontSize(13)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#1F2A44')
-
-            Text(item.title)
-              .fontSize(14)
-              .fontColor('#607089')
-          }
-          .alignItems(HorizontalAlign.Start)
-
-          Blank()
-
-          Text(item.duration)
-            .fontSize(13)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#3A86FF')
-        }
-        .width('100%')
-        .padding(14)
-        .backgroundColor('#F7FAFE')
-        .borderRadius(20)
-      }, (item: RecordItem) => item.date)
+      if (this.recentCourses.length === 0) {
+        Text('暂无学习记录')
+          .width('100%')
+          .fontSize(13)
+          .fontColor('#8AA0BC')
+          .textAlign(TextAlign.Center)
+          .padding({ top: 10, bottom: 6 })
+      } else {
+        ForEach(this.recentCourses, (item: RecentCourseItem) => {
+          this.buildRecentCourseCard(item)
+        }, (item: RecentCourseItem) => `${item.courseCode}_${item.lastLearnedAt}`)
+      }
     }
     .width('100%')
     .padding(18)
     .backgroundColor('#FFFFFF')
     .borderRadius(28)
     .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
+  }
+
+  @Builder
+  private buildRecentCourseCard(item: RecentCourseItem) {
+    Column({ space: 10 }) {
+      Row({ space: 12 }) {
+        Image(item.coverUrl)
+          .width(96)
+          .height(54)
+          .objectFit(ImageFit.Cover)
+          .borderRadius(10)
+
+        Column({ space: 6 }) {
+          Text(item.courseName)
+            .width('100%')
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#1F2A44')
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+          Text(`${item.courseCode}  ·  ${item.lastLearnedAt}`)
+            .width('100%')
+            .fontSize(11)
+            .fontColor('#7A8CA7')
+            .maxLines(1)
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+      }
+      .width('100%')
+
+      Row({ space: 8 }) {
+        Stack({ alignContent: Alignment.Start }) {
+          Row()
+            .width('100%')
+            .height(8)
+            .backgroundColor('#EAF1FB')
+            .borderRadius(8)
+
+          Row()
+            .width(`${this.getSafeProgress(item.progressPercent)}%`)
+            .height(8)
+            .linearGradient({
+              angle: 90,
+              colors: [['#74B8FF', 0], ['#2E79F4', 1]]
+            })
+            .borderRadius(8)
+        }
+        .layoutWeight(1)
+        .height(8)
+
+        Text(`${this.getSafeProgress(item.progressPercent)}%`)
+          .fontSize(12)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#2E79F4')
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding(12)
+    .backgroundColor('#F7FAFE')
+    .borderRadius(18)
+    .onClick(() => {
+      this.onOpenRecentCourse(item.courseCode)
+    })
+  }
+
+  private getSafeProgress(progress: number): number {
+    if (progress < 0) {
+      return 0
+    }
+    if (progress > 100) {
+      return 100
+    }
+    return progress
   }
 }

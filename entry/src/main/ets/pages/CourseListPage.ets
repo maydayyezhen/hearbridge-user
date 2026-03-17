@@ -1,4 +1,3 @@
-import { CourseDetailPage } from './CourseDetailPage'
 import { CourseItem } from './course/CourseModels'
 import { CourseCardList } from './course/components/CourseCardList'
 
@@ -7,11 +6,9 @@ export struct CourseListPage {
   @Prop trainingType: string = 'gesture'
   @Prop favoriteCourseCodes: string[] = []
 
-  @State selectedCourseCode: string = ''
   @State selectedTagFilters: string[] = []
   @State searchKeyword: string = ''
   @State selectedSortKey: string = 'default'
-  @State showSortMenu: boolean = false
 
   onTrainingTypeChange: (trainingType: string) => void = () => {}
   onOpenCourse: (courseName: string, courseCode: string, phrase: string, toResult: boolean) => void = () => {}
@@ -25,25 +22,25 @@ export struct CourseListPage {
   ]
 
   private readonly courses: CourseItem[] = [
-    new CourseItem(1, '日常问候入门', 'COURSE-101', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/3ad909fc0af94c58a8f2be4ca2fe4cbcChatGPT%20Image%202026%E5%B9%B43%E6%9C%8816%E6%97%A5%2001_25_49.png', '用于基础问候表达训练，掌握日常沟通中的常见开场与回应。', 1, 1, 'gesture', '入门', '高频', '实用'),
-    new CourseItem(2, '基础交流训练', 'COURSE-102', 'https://placehold.co/400x240/png?text=Course+102', '用于基础交流与礼貌表达，提升日常对话中的自然度与连贯性。', 2, 1, 'gesture', '礼貌', '基础', '沟通'),
-    new CourseItem(3, '情景对话入门', 'COURSE-201', 'https://placehold.co/400x240/png?text=Course+201', '用于常见情景对话训练，覆盖问路、购物、问候等生活场景。', 3, 1, 'gesture', '场景', '对话', '综合'),
-    new CourseItem(4, '声母训练入门', 'COURSE-301', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/smxlrm.png', '本课程围绕“声母训练入门”设计了从基础口型建立、节奏控制到综合输出的训练路径。', 4, 1, 'speech', '发音', '口语', '核心'),
-    new CourseItem(5, '日常跟读训练', 'COURSE-302', 'https://placehold.co/400x240/png?text=Course+302', '用于语音跟读与模仿训练，强化语感与句子输出稳定性。', 5, 1, 'speech', '跟读', '模仿', '提升'),
-    new CourseItem(6, '占位课程 01', 'COURSE-401', 'https://placehold.co/400x240/png?text=Course+401', '待配置课程内容。', 6, 1, 'gesture', '占位', '待配置', '预留'),
-    new CourseItem(7, '占位课程 02', 'COURSE-402', 'https://placehold.co/400x240/png?text=Course+402', '待配置课程内容。', 7, 1, 'gesture', '占位', '待配置', '预留'),
-    new CourseItem(8, '占位课程 03', 'COURSE-403', 'https://placehold.co/400x240/png?text=Course+403', '待配置课程内容。', 8, 1, 'gesture', '占位', '待配置', '预留'),
-    new CourseItem(9, '占位课程 04', 'COURSE-404', 'https://placehold.co/400x240/png?text=Course+404', '待配置课程内容。', 9, 1, 'gesture', '占位', '待配置', '预留'),
-    new CourseItem(10, '占位课程 05', 'COURSE-405', 'https://placehold.co/400x240/png?text=Course+405', '待配置课程内容。', 10, 1, 'gesture', '占位', '待配置', '预留'),
-    new CourseItem(11, '占位课程 06', 'COURSE-406', 'https://placehold.co/400x240/png?text=Course+406', '待配置课程内容。', 11, 1, 'gesture', '占位', '待配置', '预留'),
-    new CourseItem(12, '占位课程 07', 'COURSE-407', 'https://placehold.co/400x240/png?text=Course+407', '待配置课程内容。', 12, 1, 'speech', '占位', '待配置', '预留'),
-    new CourseItem(13, '占位课程 08', 'COURSE-408', 'https://placehold.co/400x240/png?text=Course+408', '待配置课程内容。', 13, 1, 'speech', '占位', '待配置', '预留'),
-    new CourseItem(14, '占位课程 09', 'COURSE-409', 'https://placehold.co/400x240/png?text=Course+409', '待配置课程内容。', 14, 1, 'speech', '占位', '待配置', '预留'),
-    new CourseItem(15, '占位课程 10', 'COURSE-410', 'https://placehold.co/400x240/png?text=Course+410', '待配置课程内容。', 15, 1, 'speech', '占位', '待配置', '预留'),
-    new CourseItem(16, '占位课程 11', 'COURSE-411', 'https://placehold.co/400x240/png?text=Course+411', '待配置课程内容。', 16, 1, 'speech', '占位', '待配置', '预留'),
-    new CourseItem(17, '占位课程 12', 'COURSE-412', 'https://placehold.co/400x240/png?text=Course+412', '待配置课程内容。', 17, 1, 'speech', '占位', '待配置', '预留'),
-    new CourseItem(18, '占位课程 13', 'COURSE-413', 'https://placehold.co/400x240/png?text=Course+413', '待配置课程内容。', 18, 1, 'gesture', '占位', '待配置', '预留'),
-    new CourseItem(19, '占位课程 14', 'COURSE-414', 'https://placehold.co/400x240/png?text=Course+414', '待配置课程内容。', 19, 1, 'speech', '占位', '待配置', '预留')
+    new CourseItem(1, '日常问候入门', 'COURSE-101', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/3ad909fc0af94c58a8f2be4ca2fe4cbcChatGPT%20Image%202026%E5%B9%B43%E6%9C%8816%E6%97%A5%2001_25_49.png', '用于基础问候表达训练，掌握日常沟通中的常见开场与回应。', 1, 1, 'gesture', 2580, '入门', '高频', '实用'),
+    new CourseItem(2, '基础交流训练', 'COURSE-102', 'https://placehold.co/400x240/png?text=Course+102', '用于基础交流与礼貌表达，提升日常对话中的自然度与连贯性。', 2, 1, 'gesture', 1920, '礼貌', '基础', '沟通'),
+    new CourseItem(3, '情景对话入门', 'COURSE-201', 'https://placehold.co/400x240/png?text=Course+201', '用于常见情景对话训练，覆盖问路、购物、问候等生活场景。', 3, 1, 'gesture', 1730, '场景', '对话', '综合'),
+    new CourseItem(4, '声母训练入门', 'COURSE-301', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/smxlrm.png', '本课程围绕“声母训练入门”设计了从基础口型建立、节奏控制到综合输出的训练路径。', 4, 1, 'speech', 3210, '发音', '口语', '核心'),
+    new CourseItem(5, '日常跟读训练', 'COURSE-302', 'https://placehold.co/400x240/png?text=Course+302', '用于语音跟读与模仿训练，强化语感与句子输出稳定性。', 5, 1, 'speech', 2860, '跟读', '模仿', '提升'),
+    new CourseItem(6, '占位课程 01', 'COURSE-401', 'https://placehold.co/400x240/png?text=Course+401', '待配置课程内容。', 6, 1, 'gesture', 680, '占位', '待配置', '预留'),
+    new CourseItem(7, '占位课程 02', 'COURSE-402', 'https://placehold.co/400x240/png?text=Course+402', '待配置课程内容。', 7, 1, 'gesture', 640, '占位', '待配置', '预留'),
+    new CourseItem(8, '占位课程 03', 'COURSE-403', 'https://placehold.co/400x240/png?text=Course+403', '待配置课程内容。', 8, 1, 'gesture', 590, '占位', '待配置', '预留'),
+    new CourseItem(9, '占位课程 04', 'COURSE-404', 'https://placehold.co/400x240/png?text=Course+404', '待配置课程内容。', 9, 1, 'gesture', 560, '占位', '待配置', '预留'),
+    new CourseItem(10, '占位课程 05', 'COURSE-405', 'https://placehold.co/400x240/png?text=Course+405', '待配置课程内容。', 10, 1, 'gesture', 520, '占位', '待配置', '预留'),
+    new CourseItem(11, '占位课程 06', 'COURSE-406', 'https://placehold.co/400x240/png?text=Course+406', '待配置课程内容。', 11, 1, 'gesture', 500, '占位', '待配置', '预留'),
+    new CourseItem(12, '占位课程 07', 'COURSE-407', 'https://placehold.co/400x240/png?text=Course+407', '待配置课程内容。', 12, 1, 'speech', 470, '占位', '待配置', '预留'),
+    new CourseItem(13, '占位课程 08', 'COURSE-408', 'https://placehold.co/400x240/png?text=Course+408', '待配置课程内容。', 13, 1, 'speech', 450, '占位', '待配置', '预留'),
+    new CourseItem(14, '占位课程 09', 'COURSE-409', 'https://placehold.co/400x240/png?text=Course+409', '待配置课程内容。', 14, 1, 'speech', 420, '占位', '待配置', '预留'),
+    new CourseItem(15, '占位课程 10', 'COURSE-410', 'https://placehold.co/400x240/png?text=Course+410', '待配置课程内容。', 15, 1, 'speech', 390, '占位', '待配置', '预留'),
+    new CourseItem(16, '占位课程 11', 'COURSE-411', 'https://placehold.co/400x240/png?text=Course+411', '待配置课程内容。', 16, 1, 'speech', 360, '占位', '待配置', '预留'),
+    new CourseItem(17, '占位课程 12', 'COURSE-412', 'https://placehold.co/400x240/png?text=Course+412', '待配置课程内容。', 17, 1, 'speech', 340, '占位', '待配置', '预留'),
+    new CourseItem(18, '占位课程 13', 'COURSE-413', 'https://placehold.co/400x240/png?text=Course+413', '待配置课程内容。', 18, 1, 'gesture', 310, '占位', '待配置', '预留'),
+    new CourseItem(19, '占位课程 14', 'COURSE-414', 'https://placehold.co/400x240/png?text=Course+414', '待配置课程内容。', 19, 1, 'speech', 280, '占位', '待配置', '预留')
   ]
 
   aboutToAppear() {
@@ -52,29 +49,26 @@ export struct CourseListPage {
 
   build() {
     Column() {
-      if (this.selectedCourseCode.length > 0) {
-        this.buildCourseDetail()
-      } else {
-        Column({ space: 16 }) {
-          this.buildSearchBar()
-          this.buildTagFilters()
-          Scroll() {
-            Column() {
-              this.buildCourseList()
-            }
-            .width('100%')
-            .justifyContent(FlexAlign.Start)
-            .alignItems(HorizontalAlign.Start)
+      Column({ space: 16 }) {
+        this.buildSearchBar()
+        this.buildTagFilters()
+        Scroll() {
+          Column() {
+            this.buildCourseList()
           }
           .width('100%')
-          .scrollBar(BarState.Off)
+          .justifyContent(FlexAlign.Start)
+          .alignItems(HorizontalAlign.Start)
+          .padding({ bottom: 156 })
         }
         .width('100%')
-        .height('100%')
-        .justifyContent(FlexAlign.Start)
-        .alignItems(HorizontalAlign.Start)
-        .padding({ left: 16, right: 16, top: 6, bottom: 30 })
+        .scrollBar(BarState.Off)
       }
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.Start)
+      .alignItems(HorizontalAlign.Start)
+      .padding({ left: 16, right: 16, top: 6, bottom: 8 })
     }
     .width('100%')
     .height('100%')
@@ -83,92 +77,39 @@ export struct CourseListPage {
   }
 
   @Builder
-  private buildCourseDetail() {
-    if (this.hasSelectedCourse()) {
-      CourseDetailPage({
-        courseName: this.getSelectedCourseName(),
-        courseCode: this.getSelectedCourseCode(),
-        courseIntro: this.getSelectedCourseIntro(),
-        coverUrl: this.getSelectedCourseCoverUrl(),
-        trainingType: this.getSelectedCourseTrainingType(),
-        courseTag1: this.getSelectedCourseTag1(),
-        courseTag2: this.getSelectedCourseTag2(),
-        courseTag3: this.getSelectedCourseTag3(),
-        isCourseFavorited: this.isCourseFavorited(this.getSelectedCourseCode()),
-        onBack: () => {
-          this.selectedCourseCode = ''
-        },
-        onToggleFavorite: (courseCode: string) => {
-          this.onToggleCourseFavorite(courseCode)
-        },
-        onOpenTrainingItem: (phrase: string, toResult: boolean) => {
-          this.onOpenCourse(this.getSelectedCourseName(), this.getSelectedCourseCode(), phrase, toResult)
-        }
-      })
-    }
-  }
-
-  @Builder
   private buildSearchBar() {
-    Stack({ alignContent: Alignment.TopEnd }) {
-      Row({ space: 8 }) {
-        TextInput({ placeholder: '搜索课程名称 / 编号 / 简介', text: this.searchKeyword })
-          .layoutWeight(1)
-          .height(40)
-          .fontSize(14)
-          .backgroundColor('#FFFFFF')
-          .borderRadius(12)
-          .padding({ left: 12, right: 12 })
-          .onChange((value: string) => {
-            this.searchKeyword = value
-          })
-
-        Button() {
-          SymbolGlyph($r('sys.symbol.square_grid_2x2'))
-            .fontSize(18)
-            .fontColor(['#2E79F4'])
-        }
-        .width(40)
+    Row({ space: 8 }) {
+      TextInput({ placeholder: '搜索课程名称 / 编号 / 简介', text: this.searchKeyword })
+        .layoutWeight(1)
         .height(40)
-        .backgroundColor('#EEF5FF')
-        .borderRadius(12)
-        .stateEffect(false)
-        .onClick(() => {
-          this.showSortMenu = !this.showSortMenu
-        })
-      }
-      .width('100%')
-
-      if (this.showSortMenu) {
-        Column({ space: 4 }) {
-          this.buildSortMenuItem('默认排序', 'default')
-          this.buildSortMenuItem('按编号', 'code')
-          this.buildSortMenuItem('按名称', 'name')
-        }
-        .padding(8)
+        .fontSize(14)
         .backgroundColor('#FFFFFF')
         .borderRadius(12)
-        .shadow({ radius: 16, color: '#15304B22', offsetX: 0, offsetY: 8 })
-        .margin({ top: 46 })
+        .padding({ left: 12, right: 12 })
+        .onChange((value: string) => {
+          this.searchKeyword = value
+        })
+
+      Button() {
+        Row({ space: 4 }) {
+          SymbolGlyph($r('sys.symbol.square_grid_2x2'))
+            .fontSize(14)
+            .fontColor(['#2E79F4'])
+          Text(this.getSortLabel())
+            .fontSize(11)
+            .fontColor('#2E79F4')
+        }
       }
+      .height(40)
+      .padding({ left: 10, right: 10 })
+      .backgroundColor('#EEF5FF')
+      .borderRadius(12)
+      .stateEffect(false)
+      .onClick(() => {
+        this.toggleSortKey()
+      })
     }
     .width('100%')
-  }
-
-  @Builder
-  private buildSortMenuItem(label: string, key: string) {
-    Text(label)
-      .width(90)
-      .padding({ left: 10, right: 10, top: 8, bottom: 8 })
-      .fontSize(12)
-      .fontColor(this.selectedSortKey === key ? '#2E79F4' : '#4E5E79')
-      .fontWeight(this.selectedSortKey === key ? FontWeight.Medium : FontWeight.Regular)
-      .backgroundColor(this.selectedSortKey === key ? '#EEF5FF' : '#FFFFFF')
-      .borderRadius(8)
-      .onClick(() => {
-        this.selectedSortKey = key
-        this.showSortMenu = false
-      })
   }
 
   @Builder
@@ -276,7 +217,10 @@ export struct CourseListPage {
       searchKeyword: this.searchKeyword,
       favoriteCourseCodes: this.favoriteCourseCodes,
       onSelectCourse: (courseCode: string) => {
-        this.selectedCourseCode = courseCode
+        const selected = this.getCourseByCode(courseCode)
+        const courseName = selected ? selected.courseName : courseCode
+        const phrase = this.trainingType === 'speech' ? '你好' : '手势'
+        this.onOpenCourse(courseName, courseCode, phrase, false)
       },
       onToggleCourseFavorite: (courseCode: string) => {
         this.onToggleCourseFavorite(courseCode)
@@ -284,12 +228,43 @@ export struct CourseListPage {
     })
   }
 
+  private getSortLabel(): string {
+    if (this.selectedSortKey === 'code') {
+      return '按编号'
+    }
+    if (this.selectedSortKey === 'name') {
+      return '按名称'
+    }
+    if (this.selectedSortKey === 'hot') {
+      return '按热度'
+    }
+    return '默认'
+  }
+
+  private toggleSortKey() {
+    if (this.selectedSortKey === 'default') {
+      this.selectedSortKey = 'hot'
+      return
+    }
+    if (this.selectedSortKey === 'hot') {
+      this.selectedSortKey = 'code'
+      return
+    }
+    if (this.selectedSortKey === 'code') {
+      this.selectedSortKey = 'name'
+      return
+    }
+    this.selectedSortKey = 'default'
+  }
+
   private getSortedCourses(): CourseItem[] {
     const list: CourseItem[] = []
     for (let i = 0; i < this.courses.length; i += 1) {
       list.push(this.courses[i])
     }
-    if (this.selectedSortKey === 'code') {
+    if (this.selectedSortKey === 'hot') {
+      list.sort((a: CourseItem, b: CourseItem) => b.learningCount - a.learningCount)
+    } else if (this.selectedSortKey === 'code') {
       list.sort((a: CourseItem, b: CourseItem) => a.courseCode.localeCompare(b.courseCode))
     } else if (this.selectedSortKey === 'name') {
       list.sort((a: CourseItem, b: CourseItem) => a.courseName.localeCompare(b.courseName))
@@ -299,65 +274,12 @@ export struct CourseListPage {
     return list
   }
 
-  private getSelectedCourse(): CourseItem | null {
+  private getCourseByCode(courseCode: string): CourseItem | null {
     for (let i = 0; i < this.courses.length; i += 1) {
-      if (this.courses[i].courseCode === this.selectedCourseCode) {
+      if (this.courses[i].courseCode === courseCode) {
         return this.courses[i]
       }
     }
     return null
-  }
-
-  private hasSelectedCourse(): boolean {
-    return this.getSelectedCourse() !== null
-  }
-
-  private getSelectedCourseName(): string {
-    const selected = this.getSelectedCourse()
-    return selected ? selected.courseName : ''
-  }
-
-  private getSelectedCourseCode(): string {
-    const selected = this.getSelectedCourse()
-    return selected ? selected.courseCode : ''
-  }
-
-  private getSelectedCourseIntro(): string {
-    const selected = this.getSelectedCourse()
-    return selected ? selected.intro : ''
-  }
-
-  private getSelectedCourseCoverUrl(): string {
-    const selected = this.getSelectedCourse()
-    return selected ? selected.coverUrl : ''
-  }
-
-  private getSelectedCourseTrainingType(): string {
-    const selected = this.getSelectedCourse()
-    return selected ? selected.trainingType : this.trainingType
-  }
-
-  private getSelectedCourseTag1(): string {
-    const selected = this.getSelectedCourse()
-    return selected ? selected.tag1 : ''
-  }
-
-  private getSelectedCourseTag2(): string {
-    const selected = this.getSelectedCourse()
-    return selected ? selected.tag2 : ''
-  }
-
-  private getSelectedCourseTag3(): string {
-    const selected = this.getSelectedCourse()
-    return selected ? selected.tag3 : ''
-  }
-
-  private isCourseFavorited(courseCode: string): boolean {
-    for (let i = 0; i < this.favoriteCourseCodes.length; i += 1) {
-      if (this.favoriteCourseCodes[i] === courseCode) {
-        return true
-      }
-    }
-    return false
   }
 }
