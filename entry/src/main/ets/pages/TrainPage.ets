@@ -5,6 +5,8 @@ import { ResultStageContent } from './train/stages/ResultStageContent'
 import { IntroStageContent } from './train/stages/IntroStageContent'
 import { GuideStageContent } from './train/stages/GuideStageContent'
 import { SummaryStageContent } from './train/stages/SummaryStageContent'
+import { TrainBottomBar } from './train/components/TrainBottomBar'
+import { TrainOutlinePanel } from './train/components/TrainOutlinePanel'
 
 class CourseScoreEntry {
   itemId: number
@@ -36,6 +38,8 @@ export struct TrainPage {
   @Prop courseCode: string = 'COURSE-101'
   @Prop trainingType: string = 'gesture'
   @Prop selectedPhrase: string = '你好'
+  @Prop initialStage: string = 'intro'
+  @Prop isCourseFavorited: boolean = false
   @State currentItemIndex: number = 0
   @State currentStage: string = 'intro'
   @State practiceMode: string = 'video'
@@ -57,7 +61,6 @@ export struct TrainPage {
   @State summaryBestScore: number = 0
   @State summaryMode: string = 'completed'
   @State summaryPausedAtName: string = ''
-  @State showPauseDialog: boolean = false
   @State showOutlinePanel: boolean = false
   @State outlinePanelOffsetX: number = 360
   @State favoriteItemIds: number[] = []
@@ -68,6 +71,7 @@ export struct TrainPage {
   onBackToCourseList: () => void = () => {}
   onCompleteTraining: () => void = () => {}
   onScoringStateChange: (isScoring: boolean) => void = () => {}
+  onToggleCourseFavorite: (courseCode: string) => void = (_courseCode: string) => {}
 
   private introScroller: Scroller = new Scroller()
   private videoScroller: Scroller = new Scroller()
@@ -105,18 +109,49 @@ export struct TrainPage {
       return
     }
 
+    let selectedIndex = -1
+    for (let index = 0; index < items.length; index += 1) {
+      if (items[index].name === this.selectedPhrase) {
+        selectedIndex = index
+        break
+      }
+    }
+
     const restored = this.tryRestoreCourseProgress(items)
     if (!restored) {
-      this.currentItemIndex = 0
-      for (let index = 0; index < items.length; index += 1) {
-        if (items[index].name === this.selectedPhrase) {
-          this.currentItemIndex = index
-          break
-        }
-      }
-      this.resetCourseSummary()
+      this.applyMockCompletedProgress(items)
     }
+
+    if (selectedIndex >= 0) {
+      this.currentItemIndex = selectedIndex
+      this.onSelectPhrase(items[this.currentItemIndex].name)
+    } else if (!restored) {
+      this.currentItemIndex = 0
+    }
+
     this.resetTrainingFlow()
+    this.applyInitialStage()
+  }
+
+  private applyInitialStage() {
+    if (this.initialStage === 'result') {
+      this.currentStage = 'result'
+      return
+    }
+    this.currentStage = 'intro'
+  }
+
+  private applyMockCompletedProgress(items: TrainingItem[]) {
+    this.resetCourseSummary()
+    if (this.courseCode !== 'COURSE-301') {
+      return
+    }
+    const presetCount = Math.min(3, items.length)
+    for (let i = 0; i < presetCount; i += 1) {
+      const score = 84 + (i * 3)
+      this.courseScoreEntries.push(new CourseScoreEntry(items[i].id, score))
+    }
+    this.refreshSummaryStats()
   }
 
   private resetCourseSummary() {
@@ -143,7 +178,6 @@ export struct TrainPage {
     this.recordedAudioUri = ''
     this.summaryMode = 'completed'
     this.summaryPausedAtName = ''
-    this.showPauseDialog = false
     this.stopDemoAudioPlayback()
     if (this.trainingType === 'speech') {
       this.audioCaptureTip = '已就绪，选一段音频开始跟读吧。'
@@ -395,7 +429,7 @@ export struct TrainPage {
 
   private isItemMatchedToCourse(item: TrainingItem): boolean {
     if (this.courseCode === 'COURSE-301') {
-      return item.id === 6 || item.id === 7 || item.id === 8
+      return item.majorCategoryCode === 'voice' && item.code.startsWith('VOI_')
     }
     if (this.courseCode === 'COURSE-302') {
       return item.id === 3
@@ -701,20 +735,19 @@ export struct TrainPage {
     this.onBackToCourseList()
   }
 
-  private openPauseDialog() {
-    if (this.currentStage === 'summary' || this.isStageAnimating) {
-      return
-    }
-    this.showPauseDialog = true
-  }
-
   private handlePauseConfirm() {
-    this.showPauseDialog = false
     const item = this.getCurrentItem()
     this.summaryMode = 'paused'
     this.summaryPausedAtName = item.name
     this.saveCourseProgress(item.name)
     this.transitionToStage('summary', true)
+  }
+
+  private handleHeaderBackAction() {
+    if (this.currentStage === 'summary' || this.isScoring || this.isStageAnimating) {
+      return
+    }
+    this.handlePauseConfirm()
   }
 
   private canShowPrevious(): boolean {
@@ -757,7 +790,7 @@ export struct TrainPage {
   }
 
   private handleStageSwipe(offsetX: number, offsetY: number) {
-    if (this.isScoring || this.isStageAnimating || this.showPauseDialog || this.currentStage === 'summary') {
+    if (this.isScoring || this.isStageAnimating || this.currentStage === 'summary') {
       return
     }
     const horizontal = Math.abs(offsetX)
@@ -816,30 +849,12 @@ export struct TrainPage {
     return false
   }
 
-  private getItemStatusText(item: TrainingItem, index: number): string {
-    if (this.isItemCompleted(item.id)) {
-      return '已完成'
+  private getCompletedItemIds(): number[] {
+    const result: number[] = []
+    for (let i = 0; i < this.courseScoreEntries.length; i += 1) {
+      result.push(this.courseScoreEntries[i].itemId)
     }
-    if (index === this.currentItemIndex) {
-      return '进行中'
-    }
-    if (index < this.currentItemIndex) {
-      return '待完成'
-    }
-    return '未开始'
-  }
-
-  private getItemStatusColor(status: string): string {
-    if (status === '已完成') {
-      return '#2E79F4'
-    }
-    if (status === '进行中') {
-      return '#4C8DFF'
-    }
-    if (status === '待完成') {
-      return '#D6722B'
-    }
-    return '#91A1B8'
+    return result
   }
 
   private openOutlinePanel() {
@@ -868,9 +883,41 @@ export struct TrainPage {
     }, 190)
   }
 
+  private toggleOutlinePanel() {
+    if (this.showOutlinePanel) {
+      this.closeOutlinePanel()
+      return
+    }
+    this.openOutlinePanel()
+  }
+
+  private handleOutlineItemClick(itemId: number, completed: boolean) {
+    const items: TrainingItem[] = this.getVisibleItems()
+    let targetIndex = -1
+    for (let i = 0; i < items.length; i += 1) {
+      if (items[i].id === itemId) {
+        targetIndex = i
+        break
+      }
+    }
+    if (targetIndex < 0) {
+      this.closeOutlinePanel()
+      return
+    }
+
+    this.selectItem(targetIndex)
+    if (completed) {
+      this.currentStage = 'result'
+    } else {
+      this.currentStage = 'intro'
+    }
+    this.closeOutlinePanel()
+  }
+
   build() {
-    Column() {
-      Stack({ alignContent: Alignment.Top }) {
+    Stack({ alignContent: Alignment.Top }) {
+      Column() {
+        Stack({ alignContent: Alignment.Top }) {
         Column() {
         if (this.currentStage === 'intro') {
           Scroll(this.introScroller) {
@@ -950,6 +997,8 @@ export struct TrainPage {
         } else if (this.currentStage === 'summary') {
           Scroll(this.resultScroller) {
             Column({ space: 16 }) {
+              Blank()
+                .height(74)
               SummaryStageContent({
                 trainingType: this.trainingType,
                 completedCount: this.summaryCompletedCount,
@@ -957,10 +1006,7 @@ export struct TrainPage {
                 averageScore: this.summaryAverageScore,
                 bestScore: this.summaryBestScore,
                 mode: this.summaryMode,
-                pausedAtName: this.summaryPausedAtName,
-                onFinish: () => {
-                  this.finishCourseAndExit()
-                }
+                pausedAtName: this.summaryPausedAtName
               })
             }
             .width('100%')
@@ -1010,186 +1056,72 @@ export struct TrainPage {
           .padding({ left: 16, right: 16, top: 0, bottom: 10 })
           .backgroundColor('#FFFFFF')
           .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
-        }
-
-        if (this.isScoring) {
-          this.buildScoringOverlay()
-        }
-
-        if (this.showPauseDialog) {
-          this.buildPauseDialog()
+        } else {
+          this.buildSummaryTopHeader()
         }
 
         if (this.showOutlinePanel) {
-          this.buildOutlinePanel()
+          TrainOutlinePanel({
+            courseName: this.courseName,
+            courseCode: this.courseCode,
+            progressText: this.getProgressText(),
+            panelOffsetX: this.outlinePanelOffsetX,
+            items: this.getVisibleItems(),
+            completedItemIds: this.getCompletedItemIds(),
+            currentIndex: this.currentItemIndex,
+            isCourseFavorited: this.isCourseFavorited,
+            onClose: () => {
+              this.closeOutlinePanel()
+            },
+            onItemClick: (itemId: number, completed: boolean) => {
+              this.handleOutlineItemClick(itemId, completed)
+            },
+            onCourseFavoriteToggle: (courseCode: string) => {
+              this.onToggleCourseFavorite(courseCode)
+            }
+          })
+        }
+
+        }
+        .layoutWeight(1)
+        .gesture(
+          PanGesture({ direction: PanDirection.Horizontal, distance: 8 })
+            .onActionEnd((event) => {
+              this.handleStageSwipe(event.offsetX, event.offsetY)
+            })
+        )
+        .width('100%')
+        .backgroundColor('#F4F7FB')
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+
+        if (this.currentStage !== 'summary') {
+          TrainBottomBar({
+            showRetry: this.currentStage === 'result',
+            isFavorited: this.isCurrentItemFavorited(),
+            progressText: this.getProgressText(),
+            onRetryClick: () => {
+              this.resetTrainingFlow()
+            },
+            onFavoriteToggle: () => {
+              this.toggleCurrentItemFavorite()
+            },
+            onOutlineToggle: () => {
+              this.toggleOutlinePanel()
+            }
+          })
         }
       }
-      .layoutWeight(1)
-      .gesture(
-        PanGesture({ direction: PanDirection.Horizontal, distance: 8 })
-          .onActionEnd((event) => {
-            this.handleStageSwipe(event.offsetX, event.offsetY)
-          })
-      )
       .width('100%')
-      .backgroundColor('#F4F7FB')
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+      .height('100%')
 
-      if (this.currentStage !== 'summary') {
-        this.buildTrainBottomBar()
+      if (this.isScoring) {
+        this.buildScoringOverlay()
       }
+
     }
     .width('100%')
     .height('100%')
     .backgroundColor('#F4F7FB')
-  }
-
-  @Builder
-  private buildTrainBottomBar() {
-    Column() {
-      Row() {
-        Button() {
-          Column({ space: 2 }) {
-            SymbolGlyph(this.isCurrentItemFavorited() ? $r('sys.symbol.star_fill') : $r('sys.symbol.star'))
-              .fontSize(18)
-              .fontColor([this.isCurrentItemFavorited() ? '#2E79F4' : '#7E8FA8'])
-
-            Text(this.isCurrentItemFavorited() ? '已收藏' : '收藏')
-              .fontSize(11)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(this.isCurrentItemFavorited() ? '#2E79F4' : '#5F718B')
-          }
-          .alignItems(HorizontalAlign.Center)
-        }
-          .width(56)
-          .height(46)
-          .stateEffect(false)
-          .backgroundColor(Color.Transparent)
-          .borderRadius(0)
-          .onClick(() => {
-            this.toggleCurrentItemFavorite()
-          })
-
-        Button() {
-          Column({ space: 2 }) {
-            SymbolGlyph($r('sys.symbol.chevron_forward'))
-              .fontSize(18)
-              .fontColor(['#7E8FA8'])
-
-            Text(this.getProgressText())
-              .fontSize(11)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#5F718B')
-          }
-          .alignItems(HorizontalAlign.Center)
-        }
-          .width(56)
-          .height(46)
-          .stateEffect(false)
-          .backgroundColor(Color.Transparent)
-          .borderRadius(0)
-          .onClick(() => {
-            this.openOutlinePanel()
-          })
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.End)
-      .padding({ left: 12, right: 16, top: 2, bottom: 6 })
-    }
-    .width('100%')
-    .backgroundColor('#FFFFFF')
-    .border({
-      width: { top: 1, right: 0, bottom: 0, left: 0 },
-      color: '#E9EFF8'
-    })
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
-  }
-
-  @Builder
-  private buildOutlinePanel() {
-    Stack({ alignContent: Alignment.End }) {
-      Column() {
-      }
-      .width('100%')
-      .height('100%')
-      .backgroundColor('#4D0B1522')
-      .onClick(() => {
-        this.closeOutlinePanel()
-      })
-
-      Column({ space: 12 }) {
-        Row() {
-          Text('训练清单')
-            .fontSize(18)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#1F2A44')
-
-          Blank()
-
-          Text(this.getProgressText())
-            .fontSize(13)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#2E79F4')
-            .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-            .backgroundColor('#EEF5FF')
-            .borderRadius(10)
-        }
-        .width('100%')
-
-        Scroll() {
-          Column({ space: 8 }) {
-            ForEach(this.getVisibleItems(), (item: TrainingItem, index: number) => {
-              Row({ space: 10 }) {
-                Text(`${index + 1}`)
-                  .width(24)
-                  .height(24)
-                  .textAlign(TextAlign.Center)
-                  .fontSize(11)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor(index === this.currentItemIndex ? '#FFFFFF' : '#7A8CA7')
-                  .backgroundColor(index === this.currentItemIndex ? '#2E79F4' : '#EEF3FB')
-                  .borderRadius(12)
-
-                Column({ space: 4 }) {
-                  Text(item.name)
-                    .fontSize(14)
-                    .fontWeight(index === this.currentItemIndex ? FontWeight.Medium : FontWeight.Regular)
-                    .fontColor('#1F2A44')
-                    .maxLines(1)
-
-                  Text(this.getItemStatusText(item, index))
-                    .fontSize(12)
-                    .fontWeight(FontWeight.Medium)
-                    .fontColor(this.getItemStatusColor(this.getItemStatusText(item, index)))
-                }
-                .layoutWeight(1)
-              }
-              .width('100%')
-              .padding({ left: 10, right: 10, top: 10, bottom: 10 })
-              .backgroundColor(index === this.currentItemIndex ? '#F5F9FF' : '#FFFFFF')
-              .borderRadius(12)
-              .border({
-                width: 1,
-                color: index === this.currentItemIndex ? '#D6E5FD' : '#EAF0F8'
-              })
-            }, (item: TrainingItem) => `${item.id}`)
-          }
-          .width('100%')
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .scrollBar(BarState.Off)
-      }
-      .width('76%')
-      .height('100%')
-      .padding({ left: 14, right: 14, top: 56, bottom: 20 })
-      .backgroundColor('#FFFFFF')
-      .translate({ x: this.outlinePanelOffsetX, y: 0 })
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-    }
-    .width('100%')
-    .height('100%')
-    .zIndex(1002)
   }
 
   @Builder
@@ -1259,135 +1191,72 @@ export struct TrainPage {
   }
 
   @Builder
-  private buildPauseDialog() {
-    Stack({ alignContent: Alignment.Center }) {
-      Column() {
-      }
-      .width('100%')
-      .height('100%')
-      .backgroundColor('#660B1522')
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-
-      Column({ space: 14 }) {
-        Text('暂停训练')
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#1F2A44')
-
-        Text('确认暂停当前训练吗？系统会记录进度，下次从未完成项继续。')
-          .fontSize(13)
-          .fontColor('#5F718B')
-          .lineHeight(20)
-
-        Row({ space: 10 }) {
-          Button('继续训练')
-            .layoutWeight(1)
-            .height(42)
-            .fontSize(14)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#2E79F4')
-            .backgroundColor('#EEF5FF')
-            .borderRadius(14)
-            .onClick(() => {
-              this.showPauseDialog = false
-            })
-
-          Button('确认暂停')
-            .layoutWeight(1)
-            .height(42)
-            .fontSize(14)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#FFFFFF')
-            .backgroundColor('#2E79F4')
-            .borderRadius(14)
-            .onClick(() => {
-              this.handlePauseConfirm()
-            })
-        }
-        .width('100%')
-      }
-      .width('86%')
-      .padding(20)
-      .backgroundColor('#FFFFFF')
-      .borderRadius(18)
-      .border({ width: 1, color: '#E4ECF8' })
-    }
-    .width('100%')
-    .height('100%')
-    .zIndex(1001)
-  }
-
-  @Builder
   private buildTopHeader() {
     Column({ space: 10 }) {
-      Row({ space: 8 }) {
-        Button() {
-          SymbolGlyph($r('sys.symbol.power'))
-            .fontSize(15)
-            .fontColor([this.currentStage === 'summary' ? '#A6B4C8' : '#5F7593'])
-        }
-          .width(34)
-          .height(34)
-          .backgroundColor('#F3F6FC')
-          .borderRadius(17)
-          .enabled(this.currentStage !== 'summary')
-          .opacity(this.currentStage === 'summary' ? 0.5 : 1)
-          .onClick(() => {
-            this.openPauseDialog()
-          })
-
+      Stack({ alignContent: Alignment.Center }) {
         Text(this.getHeaderTitle())
+          .width('100%')
+          .padding({ left: 56, right: 56 })
+          .textAlign(TextAlign.Center)
           .fontSize(24)
           .fontWeight(FontWeight.Bold)
           .fontColor('#1F2A44')
-          .layoutWeight(1)
           .maxLines(1)
 
-        Button() {
-          SymbolGlyph($r('sys.symbol.chevron_backward'))
-            .fontSize(15)
-            .fontColor([this.canShowPrevious() && !this.isScoring && !this.isStageAnimating ? '#2E79F4' : '#A6B4C8'])
-        }
-          .width(34)
-          .height(34)
-          .backgroundColor('#FFFFFF')
-          .borderRadius(17)
-          .enabled(this.canShowPrevious() && !this.isScoring && !this.isStageAnimating)
-          .opacity(this.canShowPrevious() && !this.isScoring && !this.isStageAnimating ? 1 : 0.5)
-          .onClick(() => {
-            this.goToPreviousStage()
-          })
-
-        if (this.currentStage === 'result' || this.currentStage === 'summary') {
-          Button(this.getNextLabel())
-            .height(34)
-            .fontSize(12)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#FFFFFF')
-            .backgroundColor('#2E79F4')
-            .borderRadius(17)
-            .padding({ left: 12, right: 12 })
-            .enabled(!this.isScoring && !this.isStageAnimating)
-            .opacity(this.isScoring || this.isStageAnimating ? 0.55 : 1)
-            .onClick(() => {
-              this.handleFloatingNext()
-            })
-        } else {
+        Row() {
           Button() {
-            SymbolGlyph($r('sys.symbol.chevron_forward'))
+            SymbolGlyph($r('sys.symbol.chevron_backward'))
               .fontSize(15)
-              .fontColor(['#FFFFFF'])
+              .fontColor([
+                this.currentStage !== 'summary' && !this.isScoring && !this.isStageAnimating
+                  ? '#2E79F4'
+                  : '#A6B4C8'
+              ])
           }
             .width(34)
             .height(34)
-            .backgroundColor('#2E79F4')
+            .backgroundColor('#F1F5FB')
             .borderRadius(17)
-            .enabled(!this.isScoring && !this.isStageAnimating)
-            .opacity(this.isScoring || this.isStageAnimating ? 0.55 : 1)
+            .enabled(this.currentStage !== 'summary' && !this.isScoring && !this.isStageAnimating)
+            .opacity(this.currentStage !== 'summary' && !this.isScoring && !this.isStageAnimating ? 1 : 0.5)
             .onClick(() => {
-              this.handleFloatingNext()
+              this.handleHeaderBackAction()
             })
+
+          Blank()
+
+          if (this.currentStage === 'result' || this.currentStage === 'summary') {
+            Button(this.getNextLabel())
+              .height(34)
+              .fontSize(12)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#FFFFFF')
+              .backgroundColor('#2E79F4')
+              .borderRadius(17)
+              .padding({ left: 12, right: 12 })
+              .enabled(!this.isScoring && !this.isStageAnimating)
+              .opacity(this.isScoring || this.isStageAnimating ? 0.55 : 1)
+              .onClick(() => {
+                this.handleFloatingNext()
+              })
+          } else {
+            Button() {
+              SymbolGlyph($r('sys.symbol.chevron_forward'))
+                .fontSize(15)
+                .fontColor(['#FFFFFF'])
+            }
+              .width(34)
+              .height(34)
+              .backgroundColor('#2E79F4')
+              .borderRadius(17)
+              .enabled(!this.isScoring && !this.isStageAnimating)
+              .opacity(this.isScoring || this.isStageAnimating ? 0.55 : 1)
+              .onClick(() => {
+                this.handleFloatingNext()
+              })
+          }
         }
+        .width('100%')
       }
       .width('100%')
 
@@ -1398,6 +1267,39 @@ export struct TrainPage {
         .maxLines(1)
     }
     .width('100%')
+  }
+
+  @Builder
+  private buildSummaryTopHeader() {
+    Row() {
+      Button() {
+        SymbolGlyph($r('sys.symbol.chevron_backward'))
+          .fontSize(15)
+          .fontColor(['#2E79F4'])
+      }
+      .width(34)
+      .height(34)
+      .backgroundColor('#F1F5FB')
+      .borderRadius(17)
+      .onClick(() => {
+        this.finishCourseAndExit()
+      })
+
+      Text('课程总结')
+        .layoutWeight(1)
+        .textAlign(TextAlign.Center)
+        .fontSize(20)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#1F2A44')
+
+      Blank()
+        .width(34)
+        .height(34)
+    }
+    .width('100%')
+    .padding({ left: 16, right: 16, top: 0, bottom: 10 })
+    .backgroundColor('#FFFFFF')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
   private getHeaderTitle(): string {
@@ -1786,13 +1688,7 @@ export struct TrainPage {
   private buildResultStage(item: TrainingItem) {
     ResultStageContent({
       itemName: item.name,
-      hasNextItem: this.currentItemIndex < this.getVisibleItems().length - 1,
-      onRetry: () => {
-        this.resetTrainingFlow()
-      },
-      onNext: () => {
-        this.handleNextItem()
-      }
+      score: this.mockScore
     })
   }
 

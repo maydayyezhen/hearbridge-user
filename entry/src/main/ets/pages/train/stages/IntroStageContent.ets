@@ -1,4 +1,5 @@
 import { TrainingItem } from '../TrainData'
+import { FocusTagChip } from '../components/FocusTagChip'
 
 @Component
 export struct IntroStageContent {
@@ -116,13 +117,11 @@ export struct IntroStageContent {
 
       Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start, alignItems: ItemAlign.Start }) {
         ForEach(tags, (tag: string) => {
-          Text(tag)
-            .fontSize(12)
-            .fontColor(fontColor)
-            .padding({ left: 10, right: 10, top: 8, bottom: 8 })
-            .backgroundColor(backgroundColor)
-            .borderRadius(12)
-            .margin({ right: 8, bottom: 8 })
+          FocusTagChip({
+            label: tag,
+            chipBgColor: backgroundColor,
+            chipFontColor: fontColor
+          })
         }, (tag: string) => tag)
       }
       .width('100%')

@@ -1,6 +1,7 @@
 import common from '@ohos.app.ability.common'
 import { readToken, saveToken } from '../api/AuthStorage'
 import { sendSmsCode, smsLogin } from '../api/AuthApi'
+import { CourseDetailPage } from './CourseDetailPage'
 import { CourseListPage } from './CourseListPage'
 import { HomePage } from './HomePage'
 import { LoginPage } from './LoginPage'
@@ -24,6 +25,9 @@ struct Index {
   @State selectedCourseName: string = '日常问候入门'
   @State selectedPhrase: string = '你好'
   @State selectedCourseCode: string = 'COURSE-101'
+  @State selectedTrainEntryStage: string = 'intro'
+  @State selectedCourseIntro: string = '用于基础问候表达训练。'
+  @State selectedCourseCoverUrl: string = 'http://192.168.142.128:9001/hearbridge-bucket/20260316/3ad909fc0af94c58a8f2be4ca2fe4cbcChatGPT%20Image%202026%E5%B9%B43%E6%9C%8816%E6%97%A5%2001_25_49.png'
   @State currentTrainingType: string = 'gesture'
   @State trainView: string = 'courseList'
   @State selectedFilter: string = '周'
@@ -33,6 +37,7 @@ struct Index {
   @State notificationsEnabled: boolean = true
   @State vibrationEnabled: boolean = false
   @State isTrainScoring: boolean = false
+  @State favoriteCourseCodes: string[] = []
 
   private readonly smsApiBaseUrl: string = 'http://10.133.132.87:8501'
   private countdownTimer: number = -1
@@ -170,6 +175,31 @@ struct Index {
     this.clearCountdownTimer()
   }
 
+  private isCourseFavorited(courseCode: string): boolean {
+    for (let i = 0; i < this.favoriteCourseCodes.length; i += 1) {
+      if (this.favoriteCourseCodes[i] === courseCode) {
+        return true
+      }
+    }
+    return false
+  }
+
+  private toggleCourseFavorite(courseCode: string) {
+    const next: string[] = []
+    let found = false
+    for (let i = 0; i < this.favoriteCourseCodes.length; i += 1) {
+      if (this.favoriteCourseCodes[i] === courseCode) {
+        found = true
+        continue
+      }
+      next.push(this.favoriteCourseCodes[i])
+    }
+    if (!found) {
+      next.push(courseCode)
+    }
+    this.favoriteCourseCodes = next
+  }
+
   @Builder
   private buildTopBar() {
     Row() {
@@ -292,14 +322,20 @@ struct Index {
       if (this.trainView === 'courseList') {
         CourseListPage({
           trainingType: this.currentTrainingType,
+          favoriteCourseCodes: this.favoriteCourseCodes,
           onTrainingTypeChange: (trainingType: string) => {
             this.currentTrainingType = trainingType
           },
-          onOpenCourse: (courseName: string, courseCode: string) => {
+          onToggleCourseFavorite: (courseCode: string) => {
+            this.toggleCourseFavorite(courseCode)
+          },
+          onOpenCourse: (courseName: string, courseCode: string, phrase: string, toResult: boolean) => {
             this.selectedCourseName = courseName
             this.selectedCourseCode = courseCode
             this.selectedPhrase = this.currentTrainingType === 'speech' ? '阿' : '你好'
             this.selectedPhrase = courseCode === 'COURSE-301' ? '浣犲ソ' : this.selectedPhrase
+            this.selectedPhrase = phrase
+            this.selectedTrainEntryStage = toResult ? 'result' : 'intro'
             this.trainView = 'detail'
           }
         })
@@ -309,8 +345,13 @@ struct Index {
           courseCode: this.selectedCourseCode,
           trainingType: this.currentTrainingType,
           selectedPhrase: this.selectedPhrase,
+          initialStage: this.selectedTrainEntryStage,
+          isCourseFavorited: this.isCourseFavorited(this.selectedCourseCode),
           onSelectPhrase: (phrase: string) => {
             this.selectedPhrase = phrase
+          },
+          onToggleCourseFavorite: (courseCode: string) => {
+            this.toggleCourseFavorite(courseCode)
           },
           onBackToCourseList: () => {
             this.isTrainScoring = false
@@ -403,18 +444,18 @@ struct Index {
     } else {
       Stack({ alignContent: Alignment.Top }) {
         Column() {
-          if (!(this.currentTab === 1 && this.trainView === 'detail')) {
+          if (this.currentTab !== 1) {
             this.buildTopBar()
           }
 
-          if (this.currentTab === 1 && this.trainView === 'detail') {
-          Column() {
-            this.buildCurrentPage()
-          }
-          .width('100%')
-          .layoutWeight(1)
-          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
-        } else {
+          if (this.currentTab === 1) {
+            Column() {
+              this.buildCurrentPage()
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+          } else {
             Scroll() {
               Column() {
                 this.buildCurrentPage()

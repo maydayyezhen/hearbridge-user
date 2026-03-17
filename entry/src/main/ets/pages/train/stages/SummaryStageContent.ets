@@ -7,7 +7,6 @@ export struct SummaryStageContent {
   @Prop bestScore: number = 0
   @Prop mode: string = 'completed'
   @Prop pausedAtName: string = ''
-  onFinish: () => void = () => {}
 
   build() {
     Column({ space: 14 }) {
@@ -16,21 +15,6 @@ export struct SummaryStageContent {
       this.buildTrendCard()
       this.buildDimensionCard()
       this.buildSuggestionCard()
-
-      Button(this.mode === 'paused' ? '保存并返回课程' : '返回课程列表')
-        .width('100%')
-        .height(48)
-        .fontSize(16)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#FFFFFF')
-        .linearGradient({
-          angle: 90,
-          colors: [['#6EA8FF', 0], ['#2E79F4', 1]]
-        })
-        .borderRadius(16)
-        .onClick(() => {
-          this.onFinish()
-        })
     }
     .width('100%')
   }
@@ -39,34 +23,30 @@ export struct SummaryStageContent {
   private buildHeroCard() {
     Row({ space: 14 }) {
       Stack({ alignContent: Alignment.Center }) {
-        Column() {
-        }
-        .width(108)
-        .height(108)
-        .borderRadius(54)
-        .backgroundColor('#EEF5FF')
-        .border({ width: 1, color: '#DDE9F8' })
+        Column()
+          .width(108)
+          .height(108)
+          .borderRadius(54)
+          .backgroundColor('#EEF5FF')
+          .border({ width: 1, color: '#DDE9F8' })
 
-        // progress ring
         Stack({ alignContent: Alignment.Center }) {
-          Column() {
-          }
-          .width(84)
-          .height(84)
-          .borderRadius(42)
-          .border({ width: 8, color: '#DCE8F8' })
+          Column()
+            .width(84)
+            .height(84)
+            .borderRadius(42)
+            .border({ width: 8, color: '#DCE8F8' })
 
-          Column() {
-          }
-          .width(84)
-          .height(84)
-          .borderRadius(42)
-          .clip(true)
-          .linearGradient({
-            angle: 180,
-            colors: [['#73AEFF', 0], ['#2E79F4', 1]]
-          })
-          .opacity(0.2)
+          Column()
+            .width(84)
+            .height(84)
+            .borderRadius(42)
+            .clip(true)
+            .linearGradient({
+              angle: 180,
+              colors: [['#73AEFF', 0], ['#2E79F4', 1]]
+            })
+            .opacity(0.2)
 
           Text(`${this.getCompletionPercent()}%`)
             .fontSize(17)
@@ -76,11 +56,6 @@ export struct SummaryStageContent {
       }
 
       Column({ space: 6 }) {
-        Text('课程总结')
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#1F2A44')
-
         Text(this.mode === 'paused'
           ? `已暂停在「${this.pausedAtName.length > 0 ? this.pausedAtName : '当前训练项'}」，下次将从未完成项继续。`
           : '本轮训练已完成，下面是你的整体表现。')
@@ -90,7 +65,7 @@ export struct SummaryStageContent {
 
         Row({ space: 8 }) {
           this.buildBadge(this.trainingType === 'speech' ? '口语专项' : '手势专项')
-          this.buildBadge('已生成反馈')
+          this.buildBadge('系统反馈')
         }
       }
       .layoutWeight(1)
@@ -233,22 +208,20 @@ export struct SummaryStageContent {
         .fontColor(highlighted ? '#2E79F4' : '#6C7C95')
 
       Stack({ alignContent: Alignment.Bottom }) {
-        Column() {
-        }
-        .width('100%')
-        .height('100%')
-        .backgroundColor('#F4F8FE')
-        .borderRadius(10)
+        Column()
+          .width('100%')
+          .height('100%')
+          .backgroundColor('#F4F8FE')
+          .borderRadius(10)
 
-        Column() {
-        }
-        .width('100%')
-        .height(`${score}%`)
-        .linearGradient({
-          angle: 180,
-          colors: highlighted ? [['#74AEFF', 0], ['#2E79F4', 1]] : [['#C9D8EB', 0], ['#AFC3DA', 1]]
-        })
-        .borderRadius({ topLeft: 8, topRight: 8, bottomLeft: 8, bottomRight: 8 })
+        Column()
+          .width('100%')
+          .height(`${score}%`)
+          .linearGradient({
+            angle: 180,
+            colors: highlighted ? [['#74AEFF', 0], ['#2E79F4', 1]] : [['#C9D8EB', 0], ['#AFC3DA', 1]]
+          })
+          .borderRadius({ topLeft: 8, topRight: 8, bottomLeft: 8, bottomRight: 8 })
       }
       .width('100%')
       .layoutWeight(1)
@@ -283,22 +256,20 @@ export struct SummaryStageContent {
       .width('100%')
 
       Stack({ alignContent: Alignment.Start }) {
-        Row() {
-        }
-        .width('100%')
-        .height(8)
-        .backgroundColor('#EAF1FB')
-        .borderRadius(4)
+        Row()
+          .width('100%')
+          .height(8)
+          .backgroundColor('#EAF1FB')
+          .borderRadius(4)
 
-        Row() {
-        }
-        .width(`${this.getSafeDimensionValue(value)}%`)
-        .height(8)
-        .linearGradient({
-          angle: 90,
-          colors: [['#7CB3FF', 0], ['#2E79F4', 1]]
-        })
-        .borderRadius(4)
+        Row()
+          .width(`${this.getSafeDimensionValue(value)}%`)
+          .height(8)
+          .linearGradient({
+            angle: 90,
+            colors: [['#7CB3FF', 0], ['#2E79F4', 1]]
+          })
+          .borderRadius(4)
       }
       .width('100%')
     }

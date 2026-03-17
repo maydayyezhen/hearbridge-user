@@ -143,6 +143,136 @@ export function getMockTrainingItems(): TrainingItem[] {
         new MediaResourceItem('v-step-4-2', 'advanced-step-2.jpg', 'https://placehold.co/480x480/png?text=Advanced+Step+2', 'done', '动作提示', '“好”收尾更集中，避免漏气。')
       ],
       [new MediaResourceItem('v-poster-4', 'video-cover-advanced.png', 'https://placehold.co/720x1280/png?text=Advanced+Poster', 'done')]
+    ),
+    new TrainingItem(
+      9, '口型稳定 1', 'VOI_004', 'voice', 1, false, 40, 'enabled',
+      '口型基础稳定练习。', '先慢速发音，观察嘴角与下颌开合。', '建立稳定口型控制能力。',
+      ['慢速起音', '保持口型'], ['口型忽大忽小'],
+      [new MediaResourceItem('v-cover-5', 'cover-voi-004.png', 'https://placehold.co/1280x720/png?text=VOI_004', 'done')],
+      [new MediaResourceItem('v-video-5', 'voi-004.mp4', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/7375fc2d133c4ffdb11ed159fefd7a24%E4%BD%A0%E5%A5%BD.mp4', 'done')],
+      [new MediaResourceItem('v-audio-5', 'voi-004.mp3', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.mp3', 'done')],
+      [
+        new MediaResourceItem('v-step-5-1', 'step-1.png', 'https://placehold.co/480x480/png?text=VOI_004+S1', 'done', '动作提示', '保持嘴角自然打开。'),
+        new MediaResourceItem('v-step-5-2', 'step-2.png', 'https://placehold.co/480x480/png?text=VOI_004+S2', 'done', '动作提示', '尾音收束不要拖长。')
+      ],
+      [new MediaResourceItem('v-poster-5', 'poster-voi-004.png', 'https://placehold.co/720x1280/png?text=VOI_004+Poster', 'done')]
+    ),
+    new TrainingItem(
+      10, '口型稳定 2', 'VOI_005', 'voice', 1, false, 50, 'enabled',
+      '连续发音稳定训练。', '维持节奏，避免中间停顿。', '提升连续发音流畅度。',
+      ['节奏均匀', '气息平稳'], ['中断明显'],
+      [new MediaResourceItem('v-cover-6', 'cover-voi-005.png', 'https://placehold.co/1280x720/png?text=VOI_005', 'done')],
+      [new MediaResourceItem('v-video-6', 'voi-005.mp4', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/7375fc2d133c4ffdb11ed159fefd7a24%E4%BD%A0%E5%A5%BD.mp4', 'done')],
+      [new MediaResourceItem('v-audio-6', 'voi-005.mp3', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.mp3', 'done')],
+      [
+        new MediaResourceItem('v-step-6-1', 'step-1.png', 'https://placehold.co/480x480/png?text=VOI_005+S1', 'done', '动作提示', '起音轻，口型稳。'),
+        new MediaResourceItem('v-step-6-2', 'step-2.png', 'https://placehold.co/480x480/png?text=VOI_005+S2', 'done', '动作提示', '尾音集中收紧。')
+      ],
+      [new MediaResourceItem('v-poster-6', 'poster-voi-005.png', 'https://placehold.co/720x1280/png?text=VOI_005+Poster', 'done')]
+    ),
+    new TrainingItem(
+      11, '节奏控制 1', 'VOI_006', 'voice', 2, true, 60, 'enabled',
+      '节奏分段控制。', '掌握起音与尾音之间的停连。', '形成稳定节奏感。',
+      ['先慢后快', '分段清晰'], ['节奏前快后慢'],
+      [new MediaResourceItem('v-cover-7', 'cover-voi-006.png', 'https://placehold.co/1280x720/png?text=VOI_006', 'done')],
+      [new MediaResourceItem('v-video-7', 'voi-006.mp4', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/7375fc2d133c4ffdb11ed159fefd7a24%E4%BD%A0%E5%A5%BD.mp4', 'done')],
+      [new MediaResourceItem('v-audio-7', 'voi-006.mp3', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.mp3', 'done')],
+      [
+        new MediaResourceItem('v-step-7-1', 'step-1.png', 'https://placehold.co/480x480/png?text=VOI_006+S1', 'done', '动作提示', '第一段保持稳定。'),
+        new MediaResourceItem('v-step-7-2', 'step-2.png', 'https://placehold.co/480x480/png?text=VOI_006+S2', 'done', '动作提示', '第二段自然衔接。')
+      ],
+      [new MediaResourceItem('v-poster-7', 'poster-voi-006.png', 'https://placehold.co/720x1280/png?text=VOI_006+Poster', 'done')]
+    ),
+    new TrainingItem(
+      12, '节奏控制 2', 'VOI_007', 'voice', 2, false, 70, 'enabled',
+      '稳定语速训练。', '控制语速不过快，保持清晰。', '减少含混和吞音。',
+      ['语速适中', '尾音清楚'], ['语速过快'],
+      [new MediaResourceItem('v-cover-8', 'cover-voi-007.png', 'https://placehold.co/1280x720/png?text=VOI_007', 'done')],
+      [new MediaResourceItem('v-video-8', 'voi-007.mp4', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/7375fc2d133c4ffdb11ed159fefd7a24%E4%BD%A0%E5%A5%BD.mp4', 'done')],
+      [new MediaResourceItem('v-audio-8', 'voi-007.mp3', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.mp3', 'done')],
+      [
+        new MediaResourceItem('v-step-8-1', 'step-1.png', 'https://placehold.co/480x480/png?text=VOI_007+S1', 'done', '动作提示', '保持呼吸平稳。'),
+        new MediaResourceItem('v-step-8-2', 'step-2.png', 'https://placehold.co/480x480/png?text=VOI_007+S2', 'done', '动作提示', '结尾避免漏气。')
+      ],
+      [new MediaResourceItem('v-poster-8', 'poster-voi-007.png', 'https://placehold.co/720x1280/png?text=VOI_007+Poster', 'done')]
+    ),
+    new TrainingItem(
+      13, '清晰度强化 1', 'VOI_008', 'voice', 2, false, 80, 'enabled',
+      '发音清晰度强化。', '聚焦起音与尾音的咬字。', '提高整体清晰度。',
+      ['起音干净', '收尾到位'], ['尾音含混'],
+      [new MediaResourceItem('v-cover-9', 'cover-voi-008.png', 'https://placehold.co/1280x720/png?text=VOI_008', 'done')],
+      [new MediaResourceItem('v-video-9', 'voi-008.mp4', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/7375fc2d133c4ffdb11ed159fefd7a24%E4%BD%A0%E5%A5%BD.mp4', 'done')],
+      [new MediaResourceItem('v-audio-9', 'voi-008.mp3', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.mp3', 'done')],
+      [
+        new MediaResourceItem('v-step-9-1', 'step-1.png', 'https://placehold.co/480x480/png?text=VOI_008+S1', 'done', '动作提示', '保持口型稳定。'),
+        new MediaResourceItem('v-step-9-2', 'step-2.png', 'https://placehold.co/480x480/png?text=VOI_008+S2', 'done', '动作提示', '尾音快速收束。')
+      ],
+      [new MediaResourceItem('v-poster-9', 'poster-voi-008.png', 'https://placehold.co/720x1280/png?text=VOI_008+Poster', 'done')]
+    ),
+    new TrainingItem(
+      14, '清晰度强化 2', 'VOI_009', 'voice', 2, false, 90, 'enabled',
+      '连读清晰训练。', '连续跟读中保持每个音节清楚。', '提升稳定输出能力。',
+      ['音节分明', '节奏平滑'], ['吞音'],
+      [new MediaResourceItem('v-cover-10', 'cover-voi-009.png', 'https://placehold.co/1280x720/png?text=VOI_009', 'done')],
+      [new MediaResourceItem('v-video-10', 'voi-009.mp4', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/7375fc2d133c4ffdb11ed159fefd7a24%E4%BD%A0%E5%A5%BD.mp4', 'done')],
+      [new MediaResourceItem('v-audio-10', 'voi-009.mp3', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.mp3', 'done')],
+      [
+        new MediaResourceItem('v-step-10-1', 'step-1.png', 'https://placehold.co/480x480/png?text=VOI_009+S1', 'done', '动作提示', '连贯发音不抢拍。'),
+        new MediaResourceItem('v-step-10-2', 'step-2.png', 'https://placehold.co/480x480/png?text=VOI_009+S2', 'done', '动作提示', '每个音节都发实。')
+      ],
+      [new MediaResourceItem('v-poster-10', 'poster-voi-009.png', 'https://placehold.co/720x1280/png?text=VOI_009+Poster', 'done')]
+    ),
+    new TrainingItem(
+      15, '综合训练 1', 'VOI_010', 'voice', 3, true, 100, 'enabled',
+      '综合能力训练。', '结合口型、节奏和清晰度进行实战。', '形成稳定发音模板。',
+      ['稳定口型', '平稳节奏'], ['后段松散'],
+      [new MediaResourceItem('v-cover-11', 'cover-voi-010.png', 'https://placehold.co/1280x720/png?text=VOI_010', 'done')],
+      [new MediaResourceItem('v-video-11', 'voi-010.mp4', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/7375fc2d133c4ffdb11ed159fefd7a24%E4%BD%A0%E5%A5%BD.mp4', 'done')],
+      [new MediaResourceItem('v-audio-11', 'voi-010.mp3', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.mp3', 'done')],
+      [
+        new MediaResourceItem('v-step-11-1', 'step-1.png', 'https://placehold.co/480x480/png?text=VOI_010+S1', 'done', '动作提示', '先稳住第一拍。'),
+        new MediaResourceItem('v-step-11-2', 'step-2.png', 'https://placehold.co/480x480/png?text=VOI_010+S2', 'done', '动作提示', '中后段保持同速。')
+      ],
+      [new MediaResourceItem('v-poster-11', 'poster-voi-010.png', 'https://placehold.co/720x1280/png?text=VOI_010+Poster', 'done')]
+    ),
+    new TrainingItem(
+      16, '综合训练 2', 'VOI_011', 'voice', 3, false, 110, 'enabled',
+      '强度提升训练。', '增加重复次数，强化肌肉记忆。', '提升稳定度与抗干扰能力。',
+      ['连续完成', '动作一致'], ['后半程掉速'],
+      [new MediaResourceItem('v-cover-12', 'cover-voi-011.png', 'https://placehold.co/1280x720/png?text=VOI_011', 'done')],
+      [new MediaResourceItem('v-video-12', 'voi-011.mp4', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/7375fc2d133c4ffdb11ed159fefd7a24%E4%BD%A0%E5%A5%BD.mp4', 'done')],
+      [new MediaResourceItem('v-audio-12', 'voi-011.mp3', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.mp3', 'done')],
+      [
+        new MediaResourceItem('v-step-12-1', 'step-1.png', 'https://placehold.co/480x480/png?text=VOI_011+S1', 'done', '动作提示', '重复时保持一致。'),
+        new MediaResourceItem('v-step-12-2', 'step-2.png', 'https://placehold.co/480x480/png?text=VOI_011+S2', 'done', '动作提示', '注意尾音不发散。')
+      ],
+      [new MediaResourceItem('v-poster-12', 'poster-voi-011.png', 'https://placehold.co/720x1280/png?text=VOI_011+Poster', 'done')]
+    ),
+    new TrainingItem(
+      17, '综合训练 3', 'VOI_012', 'voice', 3, false, 120, 'enabled',
+      '稳定输出训练。', '模拟真实交流场景进行跟读。', '保持自然、清晰、连贯。',
+      ['自然跟读', '节奏一致'], ['节奏抖动'],
+      [new MediaResourceItem('v-cover-13', 'cover-voi-012.png', 'https://placehold.co/1280x720/png?text=VOI_012', 'done')],
+      [new MediaResourceItem('v-video-13', 'voi-012.mp4', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/7375fc2d133c4ffdb11ed159fefd7a24%E4%BD%A0%E5%A5%BD.mp4', 'done')],
+      [new MediaResourceItem('v-audio-13', 'voi-012.mp3', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.mp3', 'done')],
+      [
+        new MediaResourceItem('v-step-13-1', 'step-1.png', 'https://placehold.co/480x480/png?text=VOI_012+S1', 'done', '动作提示', '起音自然不僵硬。'),
+        new MediaResourceItem('v-step-13-2', 'step-2.png', 'https://placehold.co/480x480/png?text=VOI_012+S2', 'done', '动作提示', '尾音干净利落。')
+      ],
+      [new MediaResourceItem('v-poster-13', 'poster-voi-012.png', 'https://placehold.co/720x1280/png?text=VOI_012+Poster', 'done')]
+    ),
+    new TrainingItem(
+      18, '综合训练 4', 'VOI_013', 'voice', 3, false, 130, 'enabled',
+      '冲刺巩固训练。', '完成最终一轮整合演练。', '巩固全流程训练成果。',
+      ['稳定完成', '保持清晰'], ['尾音拖长'],
+      [new MediaResourceItem('v-cover-14', 'cover-voi-013.png', 'https://placehold.co/1280x720/png?text=VOI_013', 'done')],
+      [new MediaResourceItem('v-video-14', 'voi-013.mp4', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/7375fc2d133c4ffdb11ed159fefd7a24%E4%BD%A0%E5%A5%BD.mp4', 'done')],
+      [new MediaResourceItem('v-audio-14', 'voi-013.mp3', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/nihao.mp3', 'done')],
+      [
+        new MediaResourceItem('v-step-14-1', 'step-1.png', 'https://placehold.co/480x480/png?text=VOI_013+S1', 'done', '动作提示', '先稳后快，保持节奏。'),
+        new MediaResourceItem('v-step-14-2', 'step-2.png', 'https://placehold.co/480x480/png?text=VOI_013+S2', 'done', '动作提示', '收尾集中，不拖尾音。')
+      ],
+      [new MediaResourceItem('v-poster-14', 'poster-voi-013.png', 'https://placehold.co/720x1280/png?text=VOI_013+Poster', 'done')]
     )
   ]
 }
