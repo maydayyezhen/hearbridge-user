@@ -1,163 +1,240 @@
+import common from '@ohos.app.ability.common'
+import { readToken } from '../api/AuthStorage'
+import { CourseListItemDto, getCourseList } from '../api/CourseApi'
 import { CourseItem } from './course/CourseModels'
 import { CourseCardList } from './course/components/CourseCardList'
 
+type SortType = 'default' | 'hot' | 'updated'
+
 @Component
 export struct CourseListPage {
+  @Prop apiBaseUrl: string = ''
   @Prop trainingType: string = 'gesture'
   @Prop favoriteCourseCodes: string[] = []
-
-  @State selectedTagFilters: string[] = []
-  @State searchKeyword: string = ''
-  @State selectedSortKey: string = 'default'
-
-  onTrainingTypeChange: (trainingType: string) => void = () => {}
-  onOpenCourse: (courseName: string, courseCode: string, phrase: string, toResult: boolean) => void = () => {}
+  onTrainingTypeChange: (trainingType: string) => void = (_trainingType: string) => {}
   onToggleCourseFavorite: (courseCode: string) => void = (_courseCode: string) => {}
+  onOpenCourse: (courseName: string, courseCode: string, phrase: string, toResult: boolean) => void =
+    (_courseName: string, _courseCode: string, _phrase: string, _toResult: boolean) => {}
 
-  private readonly commonFilters: string[] = ['手势', '口语', '入门', '高频', '实用', '场景', '对话', '综合', '发音', '核心']
-  private readonly moreFilters: string[] = [
-    '跟读', '模仿', '提升', '礼貌', '基础', '沟通', '听辨', '口型', '节奏', '尾音',
-    '元音', '声调', '纠错', '表达', '问候', '生活', '校园', '医疗', '购物', '出行',
-    '旅游', '社交', '进阶', '强化', '复习', '冲刺', '测试', '任务', '实战', '语料'
-  ]
+  @State keyword: string = ''
+  @State sortType: SortType = 'default'
+  @State selectedTags: string[] = []
+  @State displayTags: string[] = ['手势', '口语']
+  @State extraTags: string[] = []
+  @State courses: CourseItem[] = []
+  @State loading: boolean = false
+  @State tip: string = ''
 
-  private readonly courses: CourseItem[] = [
-    new CourseItem(1, '日常问候入门', 'COURSE-101', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/3ad909fc0af94c58a8f2be4ca2fe4cbcChatGPT%20Image%202026%E5%B9%B43%E6%9C%8816%E6%97%A5%2001_25_49.png', '用于基础问候表达训练，掌握日常沟通中的常见开场与回应。', 1, 1, 'gesture', 2580, '入门', '高频', '实用'),
-    new CourseItem(2, '基础交流训练', 'COURSE-102', 'https://placehold.co/400x240/png?text=Course+102', '用于基础交流与礼貌表达，提升日常对话中的自然度与连贯性。', 2, 1, 'gesture', 1920, '礼貌', '基础', '沟通'),
-    new CourseItem(3, '情景对话入门', 'COURSE-201', 'https://placehold.co/400x240/png?text=Course+201', '用于常见情景对话训练，覆盖问路、购物、问候等生活场景。', 3, 1, 'gesture', 1730, '场景', '对话', '综合'),
-    new CourseItem(4, '声母训练入门', 'COURSE-301', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/smxlrm.png', '本课程围绕“声母训练入门”设计了从基础口型建立、节奏控制到综合输出的训练路径。', 4, 1, 'speech', 3210, '发音', '口语', '核心'),
-    new CourseItem(5, '日常跟读训练', 'COURSE-302', 'https://placehold.co/400x240/png?text=Course+302', '用于语音跟读与模仿训练，强化语感与句子输出稳定性。', 5, 1, 'speech', 2860, '跟读', '模仿', '提升'),
-    new CourseItem(6, '占位课程 01', 'COURSE-401', 'https://placehold.co/400x240/png?text=Course+401', '待配置课程内容。', 6, 1, 'gesture', 680, '占位', '待配置', '预留'),
-    new CourseItem(7, '占位课程 02', 'COURSE-402', 'https://placehold.co/400x240/png?text=Course+402', '待配置课程内容。', 7, 1, 'gesture', 640, '占位', '待配置', '预留'),
-    new CourseItem(8, '占位课程 03', 'COURSE-403', 'https://placehold.co/400x240/png?text=Course+403', '待配置课程内容。', 8, 1, 'gesture', 590, '占位', '待配置', '预留'),
-    new CourseItem(9, '占位课程 04', 'COURSE-404', 'https://placehold.co/400x240/png?text=Course+404', '待配置课程内容。', 9, 1, 'gesture', 560, '占位', '待配置', '预留'),
-    new CourseItem(10, '占位课程 05', 'COURSE-405', 'https://placehold.co/400x240/png?text=Course+405', '待配置课程内容。', 10, 1, 'gesture', 520, '占位', '待配置', '预留'),
-    new CourseItem(11, '占位课程 06', 'COURSE-406', 'https://placehold.co/400x240/png?text=Course+406', '待配置课程内容。', 11, 1, 'gesture', 500, '占位', '待配置', '预留'),
-    new CourseItem(12, '占位课程 07', 'COURSE-407', 'https://placehold.co/400x240/png?text=Course+407', '待配置课程内容。', 12, 1, 'speech', 470, '占位', '待配置', '预留'),
-    new CourseItem(13, '占位课程 08', 'COURSE-408', 'https://placehold.co/400x240/png?text=Course+408', '待配置课程内容。', 13, 1, 'speech', 450, '占位', '待配置', '预留'),
-    new CourseItem(14, '占位课程 09', 'COURSE-409', 'https://placehold.co/400x240/png?text=Course+409', '待配置课程内容。', 14, 1, 'speech', 420, '占位', '待配置', '预留'),
-    new CourseItem(15, '占位课程 10', 'COURSE-410', 'https://placehold.co/400x240/png?text=Course+410', '待配置课程内容。', 15, 1, 'speech', 390, '占位', '待配置', '预留'),
-    new CourseItem(16, '占位课程 11', 'COURSE-411', 'https://placehold.co/400x240/png?text=Course+411', '待配置课程内容。', 16, 1, 'speech', 360, '占位', '待配置', '预留'),
-    new CourseItem(17, '占位课程 12', 'COURSE-412', 'https://placehold.co/400x240/png?text=Course+412', '待配置课程内容。', 17, 1, 'speech', 340, '占位', '待配置', '预留'),
-    new CourseItem(18, '占位课程 13', 'COURSE-413', 'https://placehold.co/400x240/png?text=Course+413', '待配置课程内容。', 18, 1, 'gesture', 310, '占位', '待配置', '预留'),
-    new CourseItem(19, '占位课程 14', 'COURSE-414', 'https://placehold.co/400x240/png?text=Course+414', '待配置课程内容。', 19, 1, 'speech', 280, '占位', '待配置', '预留')
-  ]
+  private readonly listScroller: Scroller = new Scroller()
+  private readonly extraTagScroller: Scroller = new Scroller()
 
   aboutToAppear() {
-    this.selectedTagFilters = [this.trainingType === 'speech' ? '口语' : '手势']
+    this.loadCourses()
   }
 
-  build() {
-    Column() {
-      Column({ space: 16 }) {
-        this.buildSearchBar()
-        this.buildTagFilters()
-        Scroll() {
-          Column() {
-            this.buildCourseList()
-          }
-          .width('100%')
-          .justifyContent(FlexAlign.Start)
-          .alignItems(HorizontalAlign.Start)
-          .padding({ bottom: 156 })
-        }
-        .width('100%')
-        .scrollBar(BarState.Off)
-      }
-      .width('100%')
-      .height('100%')
-      .justifyContent(FlexAlign.Start)
-      .alignItems(HorizontalAlign.Start)
-      .padding({ left: 16, right: 16, top: 6, bottom: 8 })
+  private getAbilityContext(): common.BaseContext {
+    return this.getUIContext().getHostContext() as common.BaseContext
+  }
+
+  private normalizeTrainingType(value: string): string {
+    const raw = value.toLowerCase()
+    if (raw === 'voice' || raw === 'speech') {
+      return 'speech'
     }
-    .width('100%')
-    .height('100%')
-    .justifyContent(FlexAlign.Start)
-    .alignItems(HorizontalAlign.Start)
+    return 'gesture'
   }
 
-  @Builder
-  private buildSearchBar() {
-    Row({ space: 8 }) {
-      TextInput({ placeholder: '搜索课程名称 / 编号 / 简介', text: this.searchKeyword })
-        .layoutWeight(1)
-        .height(40)
-        .fontSize(14)
-        .backgroundColor('#FFFFFF')
-        .borderRadius(12)
-        .padding({ left: 12, right: 12 })
-        .onChange((value: string) => {
-          this.searchKeyword = value
-        })
+  private mapTrainingTypeToApi(): string {
+    if (this.trainingType === 'speech') {
+      return 'voice'
+    }
+    if (this.trainingType === 'gesture') {
+      return 'gesture'
+    }
+    return ''
+  }
 
-      Button() {
-        Row({ space: 4 }) {
-          SymbolGlyph($r('sys.symbol.square_grid_2x2'))
-            .fontSize(14)
-            .fontColor(['#2E79F4'])
-          Text(this.getSortLabel())
-            .fontSize(11)
-            .fontColor('#2E79F4')
-        }
+  private mapSortToApi(): string {
+    if (this.sortType === 'hot') {
+      return 'hot'
+    }
+    if (this.sortType === 'updated') {
+      return 'updatedAt'
+    }
+    return 'sortNum'
+  }
+
+  private async loadCourses() {
+    if (this.loading) {
+      return
+    }
+    this.loading = true
+    this.tip = '加载课程中...'
+    try {
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.courses = []
+        this.tip = '登录已失效，请重新登录。'
+        return
       }
-      .height(40)
-      .padding({ left: 10, right: 10 })
-      .backgroundColor('#EEF5FF')
-      .borderRadius(12)
-      .stateEffect(false)
-      .onClick(() => {
-        this.toggleSortKey()
+
+      const result = await getCourseList(this.apiBaseUrl, token, {
+        keyword: this.keyword.trim(),
+        trainingType: this.mapTrainingTypeToApi(),
+        tags: this.getExtraSelectedTags(),
+        sortBy: this.mapSortToApi(),
+        pageNo: 1,
+        pageSize: 50
       })
+      if (!result.ok || !result.data) {
+        this.courses = []
+        this.tip = result.message.length > 0 ? result.message : `课程列表加载失败（错误码 ${result.code}）`
+        return
+      }
+
+      this.courses = this.mapCourseDtos(result.data.list)
+      this.refreshTagPool(result.data.list)
+      if (this.courses.length === 0) {
+        this.tip = '暂无匹配课程，试试更换筛选条件。'
+      } else {
+        this.tip = ''
+      }
+    } catch (_error) {
+      this.courses = []
+      this.tip = '网络异常，无法连接课程服务。'
+    } finally {
+      this.loading = false
     }
-    .width('100%')
   }
 
-  @Builder
-  private buildTagFilters() {
-    Column({ space: 8 }) {
-      Row({ space: 8 }) {
-        ForEach(this.getFirstRowFilters(), (tag: string) => {
-          this.buildFilterChip(tag)
-        }, (tag: string) => tag)
-      }
-      .width('100%')
+  private mapCourseDtos(list: CourseListItemDto[]): CourseItem[] {
+    const mapped: CourseItem[] = []
+    for (let i = 0; i < list.length; i += 1) {
+      const dto = list[i]
+      const normalizedType = this.normalizeTrainingType(dto.trainingType)
+      const tags = this.normalizeTags(dto.tags)
+      mapped.push(new CourseItem(
+        i + 1,
+        dto.courseName,
+        dto.courseCode,
+        dto.coverUrl,
+        dto.intro,
+        i + 1,
+        this.mapStatusToNumber(dto.status),
+        normalizedType,
+        Number(dto.learnCount ?? 0),
+        tags.length > 0 ? tags[0] : '',
+        tags.length > 1 ? tags[1] : '',
+        tags.length > 2 ? tags[2] : ''
+      ))
+    }
+    return mapped
+  }
 
-      Scroll() {
-        Row({ space: 8 }) {
-          ForEach(this.getSecondRowFilters(), (tag: string) => {
-            this.buildFilterChip(tag)
-          }, (tag: string) => tag)
+  private mapStatusToNumber(status: string): number {
+    const value = status.toLowerCase()
+    if (value === 'published' || value === 'enabled' || value === 'online') {
+      return 1
+    }
+    return 0
+  }
+
+  private normalizeTags(tags: string[]): string[] {
+    const result: string[] = []
+    for (let i = 0; i < tags.length; i += 1) {
+      const tag = tags[i].trim()
+      if (tag.length > 0 && !this.containsTag(result, tag)) {
+        result.push(tag)
+      }
+    }
+    return result
+  }
+
+  private containsTag(list: string[], target: string): boolean {
+    for (let i = 0; i < list.length; i += 1) {
+      if (list[i] === target) {
+        return true
+      }
+    }
+    return false
+  }
+
+  private refreshTagPool(list: CourseListItemDto[]) {
+    const pool: string[] = ['手势', '口语']
+    for (let i = 0; i < list.length; i += 1) {
+      const tags = list[i].tags
+      for (let j = 0; j < tags.length; j += 1) {
+        const tag = tags[j].trim()
+        if (tag.length > 0 && !this.containsTag(pool, tag)) {
+          pool.push(tag)
         }
-        .padding({ right: 8 })
       }
-      .width('100%')
-      .scrollable(ScrollDirection.Horizontal)
-      .scrollBar(BarState.Off)
-
-      Text('左右滑动查看更多标签')
-        .fontSize(11)
-        .fontColor('#8D9CB2')
-        .width('100%')
-        .textAlign(TextAlign.Start)
-        .margin({ left: 12 })
     }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
+
+    this.displayTags = []
+    for (let i = 0; i < pool.length && i < 6; i += 1) {
+      this.displayTags.push(pool[i])
+    }
+    this.extraTags = []
+    for (let i = 6; i < pool.length; i += 1) {
+      this.extraTags.push(pool[i])
+    }
   }
 
-  private getFirstRowFilters(): string[] {
-    return this.commonFilters.slice(0, 6)
-  }
-
-  private getSecondRowFilters(): string[] {
+  private getExtraSelectedTags(): string[] {
     const tags: string[] = []
-    for (let i = 6; i < this.commonFilters.length; i += 1) {
-      tags.push(this.commonFilters[i])
-    }
-    for (let i = 0; i < this.moreFilters.length; i += 1) {
-      tags.push(this.moreFilters[i])
+    for (let i = 0; i < this.selectedTags.length; i += 1) {
+      const tag = this.selectedTags[i]
+      if (tag !== '手势' && tag !== '口语') {
+        tags.push(tag)
+      }
     }
     return tags
+  }
+
+  private isTagSelected(tag: string): boolean {
+    return this.containsTag(this.selectedTags, tag)
+  }
+
+  private toggleTag(tag: string) {
+    const next: string[] = []
+    let removed = false
+    for (let i = 0; i < this.selectedTags.length; i += 1) {
+      if (this.selectedTags[i] === tag) {
+        removed = true
+        continue
+      }
+      next.push(this.selectedTags[i])
+    }
+    if (!removed) {
+      next.push(tag)
+    }
+    this.selectedTags = next
+
+    if (tag === '手势') {
+      if (!removed) {
+        this.onTrainingTypeChange('gesture')
+      } else if (this.trainingType === 'gesture') {
+        this.onTrainingTypeChange('')
+      }
+    }
+    if (tag === '口语') {
+      if (!removed) {
+        this.onTrainingTypeChange('speech')
+      } else if (this.trainingType === 'speech') {
+        this.onTrainingTypeChange('')
+      }
+    }
+
+    this.loadCourses()
+  }
+
+  private setSortType(sortType: SortType) {
+    if (this.sortType === sortType) {
+      return
+    }
+    this.sortType = sortType
+    this.loadCourses()
   }
 
   @Builder
@@ -165,116 +242,163 @@ export struct CourseListPage {
     Text(tag)
       .fontSize(12)
       .fontWeight(this.isTagSelected(tag) ? FontWeight.Medium : FontWeight.Regular)
-      .fontColor(this.isTagSelected(tag) ? '#2E79F4' : '#63738C')
+      .fontColor(this.isTagSelected(tag) ? '#FFFFFF' : '#5D7393')
       .padding({ left: 12, right: 12, top: 7, bottom: 7 })
-      .backgroundColor(this.isTagSelected(tag) ? '#EEF5FF' : '#F5F8FD')
-      .borderRadius(12)
+      .backgroundColor(this.isTagSelected(tag) ? '#2E79F4' : '#EEF4FF')
+      .borderRadius(15)
       .onClick(() => {
         this.toggleTag(tag)
       })
   }
 
-  private isTagSelected(tag: string): boolean {
-    for (let i = 0; i < this.selectedTagFilters.length; i += 1) {
-      if (this.selectedTagFilters[i] === tag) {
-        return true
-      }
-    }
-    return false
+  @Builder
+  private buildSortChip(label: string, selected: boolean, sortType: SortType) {
+    Text(label)
+      .fontSize(12)
+      .fontWeight(selected ? FontWeight.Medium : FontWeight.Regular)
+      .fontColor(selected ? '#2E79F4' : '#6C7F9A')
+      .padding({ left: 8, right: 8, top: 6, bottom: 6 })
+      .backgroundColor(selected ? '#EAF2FF' : '#F5F8FD')
+      .borderRadius(12)
+      .onClick(() => {
+        this.setSortType(sortType)
+      })
   }
 
-  private toggleTag(tag: string) {
-    if (this.isTagSelected(tag)) {
-      const next: string[] = []
-      for (let i = 0; i < this.selectedTagFilters.length; i += 1) {
-        if (this.selectedTagFilters[i] !== tag) {
-          next.push(this.selectedTagFilters[i])
-        }
-      }
-      this.selectedTagFilters = next
-    } else {
-      const next: string[] = []
-      for (let i = 0; i < this.selectedTagFilters.length; i += 1) {
-        next.push(this.selectedTagFilters[i])
-      }
-      next.push(tag)
-      this.selectedTagFilters = next
+  private getOpenPhrase(courseCode: string): string {
+    if (courseCode === 'COURSE-301') {
+      return '\u554a'
     }
+    if (this.trainingType === 'speech') {
+      return '\u554a'
+    }
+    return '\u4f60\u597d'
+  }
 
-    if (tag === '手势' && this.isTagSelected(tag)) {
-      this.onTrainingTypeChange('gesture')
-    } else if (tag === '口语' && this.isTagSelected(tag)) {
-      this.onTrainingTypeChange('speech')
+  build() {
+    Column() {
+      this.buildTopBar()
+
+      Scroll(this.listScroller) {
+        Column({ space: 10 }) {
+          if (this.loading) {
+            Text('课程加载中...')
+              .width('100%')
+              .fontSize(13)
+              .fontColor('#6E8099')
+              .padding({ top: 8, bottom: 4 })
+          } else if (this.tip.length > 0) {
+            Text(this.tip)
+              .width('100%')
+              .fontSize(13)
+              .fontColor('#E5484D')
+              .padding({ top: 8, bottom: 4 })
+          }
+
+          CourseCardList({
+            courses: this.courses,
+            trainingType: this.trainingType,
+            selectedTagFilters: [],
+            searchKeyword: '',
+            favoriteCourseCodes: this.favoriteCourseCodes,
+            includeIds: [],
+            onSelectCourse: (courseCode: string) => {
+              const course = this.findCourseByCode(courseCode)
+              if (!course) {
+                return
+              }
+              this.onOpenCourse(course.courseName, course.courseCode, this.getOpenPhrase(course.courseCode), false)
+            },
+            onToggleCourseFavorite: (courseCode: string) => {
+              this.onToggleCourseFavorite(courseCode)
+            }
+          })
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, top: 8, bottom: 30 })
+        .justifyContent(FlexAlign.Start)
+        .alignItems(HorizontalAlign.Start)
+      }
+      .layoutWeight(1)
+      .width('100%')
+      .scrollBar(BarState.Off)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
     }
+    .width('100%')
+    .height('100%')
+    .backgroundColor('#F7FAFE')
+    .justifyContent(FlexAlign.Start)
+    .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
-  private buildCourseList() {
-    CourseCardList({
-      courses: this.getSortedCourses(),
-      trainingType: this.trainingType,
-      selectedTagFilters: this.selectedTagFilters,
-      searchKeyword: this.searchKeyword,
-      favoriteCourseCodes: this.favoriteCourseCodes,
-      onSelectCourse: (courseCode: string) => {
-        const selected = this.getCourseByCode(courseCode)
-        const courseName = selected ? selected.courseName : courseCode
-        const phrase = this.trainingType === 'speech' ? '你好' : '手势'
-        this.onOpenCourse(courseName, courseCode, phrase, false)
-      },
-      onToggleCourseFavorite: (courseCode: string) => {
-        this.onToggleCourseFavorite(courseCode)
+  private buildTopBar() {
+    Column({ space: 10 }) {
+      Row({ space: 8 }) {
+        TextInput({ placeholder: '\u641c\u7d22\u8bfe\u7a0b\u540d\u79f0/\u7b80\u4ecb', text: this.keyword })
+          .layoutWeight(1)
+          .height(36)
+          .fontSize(13)
+          .backgroundColor('#FFFFFF')
+          .borderRadius(18)
+          .onChange((value: string) => {
+            this.keyword = value
+          })
+          .onSubmit(() => {
+            this.loadCourses()
+          })
+
+        Text('\u6392\u5e8f')
+          .fontSize(13)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#4F6F99')
+          .padding({ left: 12, right: 12, top: 9, bottom: 9 })
+          .backgroundColor('#FFFFFF')
+          .borderRadius(18)
       }
-    })
+      .width('100%')
+
+      Row({ space: 8 }) {
+        this.buildSortChip('\u7efc\u5408', this.sortType === 'default', 'default')
+        this.buildSortChip('\u70ed\u5ea6', this.sortType === 'hot', 'hot')
+        this.buildSortChip('\u6700\u8fd1\u66f4\u65b0', this.sortType === 'updated', 'updated')
+      }
+      .width('100%')
+
+      Row({ space: 8 }) {
+        ForEach(this.displayTags, (tag: string) => {
+          this.buildFilterChip(tag)
+        }, (tag: string) => tag)
+      }
+      .width('100%')
+
+      if (this.extraTags.length > 0) {
+        Row({ space: 8 }) {
+          Text('\u66f4\u591a\u6807\u7b7e\uff1a\u5de6\u53f3\u6ed1\u52a8')
+            .fontSize(11)
+            .fontColor('#8EA2BD')
+
+          Scroll(this.extraTagScroller) {
+            Row({ space: 8 }) {
+              ForEach(this.extraTags, (tag: string) => {
+                this.buildFilterChip(tag)
+              }, (tag: string) => tag)
+            }
+          }
+          .layoutWeight(1)
+          .scrollable(ScrollDirection.Horizontal)
+          .scrollBar(BarState.Off)
+        }
+        .width('100%')
+      }
+    }
+    .width('100%')
+    .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+    .backgroundColor('#F7FAFE')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
-  private getSortLabel(): string {
-    if (this.selectedSortKey === 'code') {
-      return '按编号'
-    }
-    if (this.selectedSortKey === 'name') {
-      return '按名称'
-    }
-    if (this.selectedSortKey === 'hot') {
-      return '按热度'
-    }
-    return '默认'
-  }
-
-  private toggleSortKey() {
-    if (this.selectedSortKey === 'default') {
-      this.selectedSortKey = 'hot'
-      return
-    }
-    if (this.selectedSortKey === 'hot') {
-      this.selectedSortKey = 'code'
-      return
-    }
-    if (this.selectedSortKey === 'code') {
-      this.selectedSortKey = 'name'
-      return
-    }
-    this.selectedSortKey = 'default'
-  }
-
-  private getSortedCourses(): CourseItem[] {
-    const list: CourseItem[] = []
-    for (let i = 0; i < this.courses.length; i += 1) {
-      list.push(this.courses[i])
-    }
-    if (this.selectedSortKey === 'hot') {
-      list.sort((a: CourseItem, b: CourseItem) => b.learningCount - a.learningCount)
-    } else if (this.selectedSortKey === 'code') {
-      list.sort((a: CourseItem, b: CourseItem) => a.courseCode.localeCompare(b.courseCode))
-    } else if (this.selectedSortKey === 'name') {
-      list.sort((a: CourseItem, b: CourseItem) => a.courseName.localeCompare(b.courseName))
-    } else {
-      list.sort((a: CourseItem, b: CourseItem) => a.sortNum - b.sortNum)
-    }
-    return list
-  }
-
-  private getCourseByCode(courseCode: string): CourseItem | null {
+  private findCourseByCode(courseCode: string): CourseItem | null {
     for (let i = 0; i < this.courses.length; i += 1) {
       if (this.courses[i].courseCode === courseCode) {
         return this.courses[i]

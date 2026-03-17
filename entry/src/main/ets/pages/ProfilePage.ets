@@ -1,27 +1,67 @@
-import { mockUpdatePassword, mockUploadAvatar } from '../api/ProfileApi'
+import common from '@ohos.app.ability.common'
+import { clearToken, readToken } from '../api/AuthStorage'
+import { updatePassword, updateUserProfile } from '../api/AuthApi'
 import photoAccessHelper from '@ohos.file.photoAccessHelper'
+
+class FavoriteDisplayItem {
+  id: string
+  title: string
+  subtitle: string
+  courseCode: string
+  trainingType: string
+  phrase: string
+
+  constructor(id: string, title: string, subtitle: string, courseCode: string, trainingType: string, phrase: string) {
+    this.id = id
+    this.title = title
+    this.subtitle = subtitle
+    this.courseCode = courseCode
+    this.trainingType = trainingType
+    this.phrase = phrase
+  }
+}
 
 @Component
 export struct ProfilePage {
   @Prop currentView: string = 'main'
+  @Prop apiBaseUrl: string = ''
   @Link avatarUrl: string
+  @Prop backendNickname: string = ''
+  @Prop backendSignature: string = ''
+  @Prop backendCoverUrl: string = ''
+  @Prop backendGender: number = 0
+  @Prop backendBirthday: string = ''
+  @Prop backendCompanionDays: number = 0
   @Prop selectedGoal: string = ''
   @Prop selectedTheme: string = ''
   @Prop notificationsEnabled: boolean = true
   @Prop vibrationEnabled: boolean = false
+  @Prop favoriteCourseCodes: string[] = []
 
   @State selectedAvatarUrl: string = ''
   @State avatarTip: string = '可选择预设头像或从本地相册选择后上传。'
   @State avatarTipTone: string = 'normal'
   @State isUploadingAvatar: boolean = false
   @State isPickingAvatar: boolean = false
+  @State favoriteTab: string = 'course'
 
   @State profileNickname: string = '桥桥'
   @State profileGender: string = '女'
   @State profileBirthday: string = '2000-01-01'
   @State profileSignature: string = '每天进步一点点。'
+  @State companionDays: number = 86
+  @State trainedQuestionCount: number = 328
+  @State profileCoverUrl: string = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80'
   @State profileTip: string = '可随时更新账号资料。'
   @State profileTipTone: string = 'normal'
+  @State isSavingProfile: boolean = false
+  @State isPickingProfileCover: boolean = false
+  @State baselineNickname: string = ''
+  @State baselineGender: string = ''
+  @State baselineBirthday: string = ''
+  @State baselineSignature: string = ''
+  @State baselineCoverUrl: string = ''
+  @State baselineAvatarUrl: string = ''
 
   @State currentPassword: string = ''
   @State nextPassword: string = ''
@@ -36,21 +76,76 @@ export struct ProfilePage {
   onOpenAccountProfile: () => void = () => {}
   onCloseSettings: () => void = () => {}
   onBackToSettings: () => void = () => {}
+  onOpenFavoriteCourse: (courseCode: string) => void = () => {}
+  onOpenFavoriteTrainingItem: (courseCode: string, trainingType: string, phrase: string) => void = () => {}
   onGoalChange: (goal: string) => void = () => {}
   onThemeChange: (theme: string) => void = () => {}
   onNotificationsChange: (value: boolean) => void = () => {}
   onVibrationChange: (value: boolean) => void = () => {}
+  onProfileUpdated: (nickname: string, signature: string, coverUrl: string, gender: number, birthday: string, avatarUrl: string) => void = () => {}
+  onPasswordUpdatedLogout: () => void = () => {}
 
   private readonly avatarOptions: string[] = [
     'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&q=80',
     'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80',
     'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80'
   ]
+  private readonly coverOptions: string[] = [
+    'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1493244040629-496f6d136cc3?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1200&q=80'
+  ]
 
   aboutToAppear() {
     if (this.selectedAvatarUrl.length === 0) {
       this.selectedAvatarUrl = this.avatarUrl
     }
+    this.syncProfileFromBackend()
+    this.markProfileBaseline()
+  }
+
+  private syncProfileFromBackend() {
+    if (this.backendNickname.length > 0) {
+      this.profileNickname = this.backendNickname
+    }
+    if (this.backendSignature.length > 0) {
+      this.profileSignature = this.backendSignature
+    }
+    if (this.backendCoverUrl.length > 0) {
+      this.profileCoverUrl = this.backendCoverUrl
+    }
+    if (this.backendBirthday.length > 0) {
+      this.profileBirthday = this.backendBirthday
+    }
+    if (this.backendCompanionDays >= 0) {
+      this.companionDays = this.backendCompanionDays
+    }
+    if (this.backendGender === 1) {
+      this.profileGender = '男'
+    } else if (this.backendGender === 2) {
+      this.profileGender = '女'
+    } else {
+      this.profileGender = '未设置'
+    }
+  }
+
+  private markProfileBaseline() {
+    this.baselineNickname = this.profileNickname.trim()
+    this.baselineGender = this.profileGender
+    this.baselineBirthday = this.profileBirthday
+    this.baselineSignature = this.profileSignature
+    this.baselineCoverUrl = this.profileCoverUrl
+    this.baselineAvatarUrl = this.selectedAvatarUrl.length > 0 ? this.selectedAvatarUrl : this.avatarUrl
+  }
+
+  private hasProfileChanges(): boolean {
+    const currentAvatar = this.selectedAvatarUrl.length > 0 ? this.selectedAvatarUrl : this.avatarUrl
+    return this.baselineNickname !== this.profileNickname.trim() ||
+      this.baselineGender !== this.profileGender ||
+      this.baselineBirthday !== this.profileBirthday ||
+      this.baselineSignature !== this.profileSignature ||
+      this.baselineCoverUrl !== this.profileCoverUrl ||
+      this.baselineAvatarUrl !== currentAvatar
   }
 
   build() {
@@ -58,9 +153,23 @@ export struct ProfilePage {
       Scroll() {
         Column({ space: 18 }) {
           if (this.currentView === 'accountSecurity') {
-            this.buildAccountSecurity()
+            Column() {
+              this.buildAccountSecurity()
+            }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 6 })
           } else if (this.currentView === 'accountProfile') {
-            this.buildAccountProfile()
+            Column() {
+              this.buildAccountProfile()
+            }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 6 })
+          } else if (this.currentView === 'favorites') {
+            Column() {
+              this.buildFavoritesView()
+            }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 6 })
           } else {
             this.buildProfileOverview()
           }
@@ -69,23 +178,29 @@ export struct ProfilePage {
         .justifyContent(FlexAlign.Start)
         .alignItems(HorizontalAlign.Start)
         .constraintSize({ minHeight: '100%' })
-        .padding({ left: 16, right: 16, top: 6, bottom: 24 })
+        .padding({ left: 0, right: 0, top: 0, bottom: 24 })
       }
       .width('100%')
       .layoutWeight(1)
       .scrollBar(BarState.Off)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
     }
     .width('100%')
     .height('100%')
     .justifyContent(FlexAlign.Start)
     .alignItems(HorizontalAlign.Start)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
   @Builder
   private buildProfileOverview() {
-    Column({ space: 18 }) {
+    Column({ space: 14 }) {
       this.buildProfileCard()
-      this.buildMainActions()
+      Column() {
+        this.buildMainActions()
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16 })
     }
     .width('100%')
   }
@@ -104,6 +219,47 @@ export struct ProfilePage {
       })
       this.buildMenuRow($r('sys.symbol.questionmark_circle'), '帮助与反馈')
       this.buildMenuRow($r('sys.symbol.info_circle'), '关于 HearBridge')
+    }
+    .width('100%')
+  }
+
+  @Builder
+  private buildFavoritesView() {
+    Column({ space: 14 }) {
+      this.buildPageHeader('我的收藏', '课程与训练项收藏', () => {
+        this.onBackToSettings()
+      })
+
+      Row({ space: 8 }) {
+        this.buildFavoritesTab('course', '课程')
+        this.buildFavoritesTab('item', '训练项')
+      }
+      .width('100%')
+
+      Column({ space: 10 }) {
+        if (this.favoriteTab === 'course') {
+          if (this.getFavoriteCourseItems().length === 0) {
+            this.buildFavoriteEmpty('还没有收藏课程')
+          } else {
+            ForEach(this.getFavoriteCourseItems(), (item: FavoriteDisplayItem) => {
+              this.buildFavoriteRow(item, () => {
+                this.onOpenFavoriteCourse(item.courseCode)
+              })
+            }, (item: FavoriteDisplayItem) => item.id)
+          }
+        } else {
+          if (this.getFavoriteTrainingItems().length === 0) {
+            this.buildFavoriteEmpty('还没有收藏训练项')
+          } else {
+            ForEach(this.getFavoriteTrainingItems(), (item: FavoriteDisplayItem) => {
+              this.buildFavoriteRow(item, () => {
+                this.onOpenFavoriteTrainingItem(item.courseCode, item.trainingType, item.phrase)
+              })
+            }, (item: FavoriteDisplayItem) => item.id)
+          }
+        }
+      }
+      .width('100%')
     }
     .width('100%')
   }
@@ -186,6 +342,44 @@ export struct ProfilePage {
       .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
 
       Column({ space: 12 }) {
+        Text('背景头图')
+          .width('100%')
+          .fontSize(18)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#1F2A44')
+
+        Image(this.profileCoverUrl)
+          .width('100%')
+          .height(118)
+          .objectFit(ImageFit.Cover)
+          .borderRadius(16)
+
+        Row({ space: 8 }) {
+          ForEach(this.coverOptions, (cover: string) => {
+            this.buildCoverOption(cover)
+          }, (cover: string) => cover)
+        }
+        .width('100%')
+
+        Button(this.isPickingProfileCover ? '读取中...' : '从相册选择背景')
+          .width('100%')
+          .height(44)
+          .fontSize(14)
+          .fontColor('#2E79F4')
+          .backgroundColor('#F5F8FD')
+          .borderRadius(16)
+          .enabled(!this.isPickingProfileCover)
+          .onClick(() => {
+            this.openCoverPicker()
+          })
+      }
+      .width('100%')
+      .padding(18)
+      .backgroundColor('#FFFFFF')
+      .borderRadius(28)
+      .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
+
+      Column({ space: 12 }) {
         this.buildInput('昵称', '请输入昵称', this.profileNickname, (value: string) => {
           this.profileNickname = value
         })
@@ -235,7 +429,7 @@ export struct ProfilePage {
           .fontSize(12)
           .fontColor(this.getTipColor(this.profileTipTone))
 
-        Button('保存资料')
+        Button(this.isSavingProfile ? '保存中...' : (this.hasProfileChanges() ? '保存资料' : '暂无变更'))
           .width('100%')
           .height(46)
           .fontSize(15)
@@ -246,10 +440,9 @@ export struct ProfilePage {
             colors: [['#5FA7FF', 0], ['#2E79F4', 1]]
           })
           .borderRadius(18)
+          .enabled(!this.isSavingProfile && this.hasProfileChanges())
           .onClick(() => {
-            this.avatarUrl = this.selectedAvatarUrl.length > 0 ? this.selectedAvatarUrl : this.avatarUrl
-            this.profileTip = '资料已保存（本地模拟）。'
-            this.profileTipTone = 'success'
+            this.handleSaveProfile()
           })
       }
       .width('100%')
@@ -337,6 +530,112 @@ export struct ProfilePage {
     this.submitPasswordChange()
   }
 
+  private getAbilityContext(): common.BaseContext {
+    return this.getUIContext().getHostContext() as common.BaseContext
+  }
+
+  private resolveGenderCode(): number {
+    if (this.profileGender === '男') {
+      return 1
+    }
+    if (this.profileGender === '女') {
+      return 2
+    }
+    return 0
+  }
+
+  private async handleSaveProfile() {
+    if (this.isSavingProfile) {
+      return
+    }
+    if (!this.hasProfileChanges()) {
+      this.profileTip = '当前没有需要保存的变更。'
+      this.profileTipTone = 'normal'
+      return
+    }
+
+    const nickname = this.profileNickname.trim()
+    if (nickname.length === 0) {
+      this.profileTip = '昵称不能为空。'
+      this.profileTipTone = 'error'
+      return
+    }
+
+    if (nickname.length > 20) {
+      this.profileTip = '昵称最多 20 个字符。'
+      this.profileTipTone = 'error'
+      return
+    }
+
+    if (this.profileSignature.length > 200) {
+      this.profileTip = '个性签名最多 200 个字符。'
+      this.profileTipTone = 'error'
+      return
+    }
+
+    if (this.profileBirthday.length > 0 && !/^\d{4}-\d{2}-\d{2}$/.test(this.profileBirthday)) {
+      this.profileTip = '生日格式需为 YYYY-MM-DD。'
+      this.profileTipTone = 'error'
+      return
+    }
+
+    this.isSavingProfile = true
+    this.profileTip = '正在保存资料...'
+    this.profileTipTone = 'normal'
+
+    try {
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.profileTip = '登录状态已失效，请重新登录。'
+        this.profileTipTone = 'error'
+        return
+      }
+
+      const nextAvatarUrl = this.selectedAvatarUrl.length > 0 ? this.selectedAvatarUrl : this.avatarUrl
+      const result = await updateUserProfile(this.apiBaseUrl, token, {
+        nickname,
+        gender: this.resolveGenderCode(),
+        birthday: this.profileBirthday.length > 0 ? this.profileBirthday : null,
+        signature: this.profileSignature,
+        avatarUrl: nextAvatarUrl,
+        coverUrl: this.profileCoverUrl
+      })
+      if (!result.ok || !result.data) {
+        result.message = this.resolveProfileUpdateError(result.code, result.message)
+      }
+
+      if (!result.ok || !result.data) {
+        this.profileTip = result.message.length > 0 ? result.message : '保存失败，请稍后重试。'
+        this.profileTipTone = 'error'
+        return
+      }
+
+      this.profileNickname = result.data.profile.nickname
+      this.profileSignature = result.data.profile.signature
+      this.profileBirthday = result.data.profile.birthday ?? ''
+      this.profileCoverUrl = result.data.profile.coverUrl
+      this.avatarUrl = result.data.profile.avatarUrl
+      this.selectedAvatarUrl = result.data.profile.avatarUrl
+      this.profileGender = result.data.profile.gender === 1 ? '男' : (result.data.profile.gender === 2 ? '女' : '保密')
+      this.onProfileUpdated(
+        result.data.profile.nickname,
+        result.data.profile.signature,
+        result.data.profile.coverUrl,
+        result.data.profile.gender,
+        result.data.profile.birthday ?? '',
+        result.data.profile.avatarUrl
+      )
+      this.markProfileBaseline()
+      this.profileTip = '资料已保存。'
+      this.profileTipTone = 'success'
+    } catch (_error) {
+      this.profileTip = '保存失败，请检查网络后重试。'
+      this.profileTipTone = 'error'
+    } finally {
+      this.isSavingProfile = false
+    }
+  }
+
   private async submitPasswordChange() {
     if (this.isUpdatingPassword) {
       return
@@ -345,17 +644,35 @@ export struct ProfilePage {
     this.passwordTip = '正在提交密码修改...'
     this.passwordTipTone = 'normal'
     try {
-      const result = await mockUpdatePassword(this.currentPassword, this.nextPassword)
-      if (result.ok) {
-        this.passwordTip = `${result.message}（本地模拟）`
-        this.passwordTipTone = 'success'
-        this.currentPassword = ''
-        this.nextPassword = ''
-        this.confirmPassword = ''
-      } else {
-        this.passwordTip = result.message
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.passwordTip = '登录状态已失效，请重新登录。'
         this.passwordTipTone = 'error'
+        return
       }
+      const result = await updatePassword(this.apiBaseUrl, token, {
+        oldPassword: this.currentPassword,
+        newPassword: this.nextPassword,
+        confirmPassword: this.confirmPassword
+      })
+      if (!result.ok) {
+        result.message = this.resolvePasswordUpdateError(result.code, result.message)
+      }
+      if (!result.ok) {
+        this.passwordTip = result.message.length > 0 ? result.message : '密码修改失败，请稍后重试。'
+        this.passwordTipTone = 'error'
+        return
+      }
+      await clearToken(this.getAbilityContext())
+      this.passwordTip = '密码修改成功，请重新登录。'
+      this.passwordTipTone = 'success'
+      this.currentPassword = ''
+      this.nextPassword = ''
+      this.confirmPassword = ''
+      this.onPasswordUpdatedLogout()
+    } catch (_error) {
+      this.passwordTip = '网络异常，密码修改失败。'
+      this.passwordTipTone = 'error'
     } finally {
       this.isUpdatingPassword = false
     }
@@ -365,20 +682,18 @@ export struct ProfilePage {
     if (this.isUploadingAvatar) {
       return
     }
+    if (this.selectedAvatarUrl.length === 0) {
+      this.avatarTip = '请先选择头像。'
+      this.avatarTipTone = 'error'
+      return
+    }
     this.isUploadingAvatar = true
-    this.avatarTip = '正在模拟上传头像...'
+    this.avatarTip = '头像已就绪，点击“保存资料”后提交到服务端。'
     this.avatarTipTone = 'normal'
     try {
-      const result = await mockUploadAvatar(this.selectedAvatarUrl)
-      if (result.ok && result.data) {
-        this.avatarUrl = result.data.avatarUrl
-        this.selectedAvatarUrl = result.data.avatarUrl
-        this.avatarTip = '头像上传成功（本地模拟）。'
-        this.avatarTipTone = 'success'
-      } else {
-        this.avatarTip = result.message
-        this.avatarTipTone = 'error'
-      }
+      this.avatarUrl = this.selectedAvatarUrl
+      this.avatarTip = '头像已设置，记得保存资料。'
+      this.avatarTipTone = 'success'
     } finally {
       this.isUploadingAvatar = false
     }
@@ -413,6 +728,30 @@ export struct ProfilePage {
     }
   }
 
+  private async openCoverPicker() {
+    if (this.isPickingProfileCover) {
+      return
+    }
+    this.isPickingProfileCover = true
+    try {
+      let photoPicker = new photoAccessHelper.PhotoViewPicker()
+      let pickerOptions = new photoAccessHelper.PhotoSelectOptions()
+      pickerOptions.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE
+      pickerOptions.maxSelectNumber = 1
+      const pickerResult = await photoPicker.select(pickerOptions)
+      if (pickerResult.photoUris.length > 0) {
+        this.profileCoverUrl = pickerResult.photoUris[0]
+        this.profileTip = '背景头图已更新（本地模拟）。'
+        this.profileTipTone = 'success'
+      }
+    } catch (_error) {
+      this.profileTip = '当前环境不支持相册读取，请在真机重试。'
+      this.profileTipTone = 'error'
+    } finally {
+      this.isPickingProfileCover = false
+    }
+  }
+
   private getTipColor(tone: string): string {
     if (tone === 'error') {
       return '#E5484D'
@@ -421,6 +760,71 @@ export struct ProfilePage {
       return '#2BA471'
     }
     return '#7A8CA7'
+  }
+
+  private resolveProfileUpdateError(code: number, message: string): string {
+    if (message.length > 0 && message !== '数据异常') {
+      return message
+    }
+    if (code === 204) {
+      if (this.profileNickname.trim().length === 0) {
+        return '昵称不能为空。'
+      }
+      if (this.profileNickname.trim().length > 20) {
+        return '昵称长度不能超过20个字符。'
+      }
+      if (this.profileBirthday.length > 0 && !/^\d{4}-\d{2}-\d{2}$/.test(this.profileBirthday)) {
+        return '生日格式错误，请使用YYYY-MM-DD。'
+      }
+      if (this.profileSignature.length > 200) {
+        return '个性签名不能超过200个字符。'
+      }
+      return '资料参数不合法，请检查后重试。'
+    }
+    if (code === 208) {
+      return '登录已过期，请重新登录。'
+    }
+    if (code === 216) {
+      return '账号已被禁用，请联系管理员。'
+    }
+    if (code === 9999) {
+      return '服务器异常，请稍后重试。'
+    }
+    return message.length > 0 ? message : `保存失败（错误码 ${code}）。`
+  }
+
+  private resolvePasswordUpdateError(code: number, message: string): string {
+    if (message.length > 0 && message !== '数据异常') {
+      return message
+    }
+    if (code === 201) {
+      return '当前密码错误，请重新输入。'
+    }
+    if (code === 204) {
+      if (this.currentPassword.length === 0) {
+        return '请输入当前密码。'
+      }
+      if (this.nextPassword.length < 8) {
+        return '新密码至少8位。'
+      }
+      if (this.nextPassword !== this.confirmPassword) {
+        return '两次输入的新密码不一致。'
+      }
+      if (this.currentPassword === this.nextPassword) {
+        return '新密码不能与旧密码相同。'
+      }
+      return '密码参数不合法，请检查后重试。'
+    }
+    if (code === 208) {
+      return '登录已过期，请重新登录。'
+    }
+    if (code === 216) {
+      return '账号已被禁用，请联系管理员。'
+    }
+    if (code === 9999) {
+      return '服务器异常，请稍后重试。'
+    }
+    return message.length > 0 ? message : `密码修改失败（错误码 ${code}）。`
   }
 
   @Builder
@@ -462,39 +866,190 @@ export struct ProfilePage {
   }
 
   @Builder
-  private buildProfileCard() {
-    Row({ space: 14 }) {
-      Image(this.avatarUrl)
-        .width(56)
-        .height(56)
-        .objectFit(ImageFit.Cover)
-        .borderRadius(28)
+  private buildFavoritesTab(tab: string, label: string) {
+    Text(label)
+      .layoutWeight(1)
+      .height(36)
+      .textAlign(TextAlign.Center)
+      .fontSize(14)
+      .fontWeight(this.favoriteTab === tab ? FontWeight.Medium : FontWeight.Regular)
+      .fontColor(this.favoriteTab === tab ? '#2E79F4' : '#6F83A2')
+      .backgroundColor(this.favoriteTab === tab ? '#EAF2FF' : '#F5F8FD')
+      .borderRadius(12)
+      .onClick(() => {
+        this.favoriteTab = tab
+      })
+  }
 
-      Column({ space: 6 }) {
-        Text(this.profileNickname)
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#1F2A44')
-
-        Text(`个性签名：${this.profileSignature}`)
-          .fontSize(13)
-          .fontColor('#607089')
-          .maxLines(1)
-
-        Text('练习时长 12 小时')
-          .fontSize(13)
-          .fontColor('#607089')
+  @Builder
+  private buildFavoriteRow(item: FavoriteDisplayItem, onClickAction: () => void) {
+    Row({ space: 12 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Row()
+          .width(30)
+          .height(30)
+          .backgroundColor('#EDF4FF')
+          .borderRadius(15)
+        SymbolGlyph($r('sys.symbol.star_fill'))
+          .fontSize(15)
+          .fontColor(['#2E79F4'])
       }
+      .width(30)
+      .height(30)
+
+      Column({ space: 4 }) {
+        Text(item.title)
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#1F2A44')
+          .maxLines(1)
+        Text(item.subtitle)
+          .fontSize(12)
+          .fontColor('#7A8CA7')
+          .maxLines(1)
+      }
+      .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
 
-      Blank()
+      SymbolGlyph($r('sys.symbol.chevron_forward'))
+        .fontSize(14)
+        .fontColor(['#9BAAC0'])
     }
     .width('100%')
-    .padding(20)
-    .backgroundImage($r('app.media.background'))
-    .backgroundImageSize(ImageSize.Cover)
-    .backgroundBlurStyle(BlurStyle.COMPONENT_ULTRA_THICK)
-    .borderRadius(28)
+    .padding(14)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(16)
+    .shadow({ radius: 12, color: '#15304B0D', offsetX: 0, offsetY: 5 })
+    .onClick(() => {
+      onClickAction()
+    })
+  }
+
+  @Builder
+  private buildFavoriteEmpty(text: string) {
+    Column({ space: 8 }) {
+      SymbolGlyph($r('sys.symbol.star'))
+        .fontSize(22)
+        .fontColor(['#9FB0C8'])
+      Text(text)
+        .fontSize(13)
+        .fontColor('#7F90A8')
+    }
+    .width('100%')
+    .padding({ top: 30, bottom: 30 })
+    .alignItems(HorizontalAlign.Center)
+  }
+
+  private getFavoriteCourseItems(): FavoriteDisplayItem[] {
+    const items: FavoriteDisplayItem[] = []
+    for (let i = 0; i < this.favoriteCourseCodes.length; i += 1) {
+      const code = this.favoriteCourseCodes[i]
+      items.push(new FavoriteDisplayItem(code, this.getCourseNameByCode(code), code, code, this.getCourseTrainingTypeByCode(code), ''))
+    }
+    return items
+  }
+
+  private getFavoriteTrainingItems(): FavoriteDisplayItem[] {
+    const items: FavoriteDisplayItem[] = []
+    items.push(new FavoriteDisplayItem('item-1', '你好', '口语训练 · 声母训练入门', 'COURSE-301', 'speech', '你好'))
+    items.push(new FavoriteDisplayItem('item-2', '阿', '口语训练 · 声母训练入门', 'COURSE-301', 'speech', '阿'))
+    items.push(new FavoriteDisplayItem('item-3', '手势问候', '手势训练 · 日常问候入门', 'COURSE-101', 'gesture', '你好'))
+    return items
+  }
+
+  private getCourseNameByCode(courseCode: string): string {
+    if (courseCode === 'COURSE-301') {
+      return '声母训练入门'
+    }
+    if (courseCode === 'COURSE-302') {
+      return '日常跟读训练'
+    }
+    if (courseCode === 'COURSE-101') {
+      return '日常问候入门'
+    }
+    if (courseCode === 'COURSE-102') {
+      return '基础交流训练'
+    }
+    return courseCode
+  }
+
+  private getCourseTrainingTypeByCode(courseCode: string): string {
+    if (courseCode === 'COURSE-301' || courseCode === 'COURSE-302') {
+      return 'speech'
+    }
+    return 'gesture'
+  }
+
+  @Builder
+  private buildProfileCard() {
+    Stack({ alignContent: Alignment.BottomStart }) {
+      Image(this.profileCoverUrl)
+        .width('100%')
+        .height(196)
+        .objectFit(ImageFit.Cover)
+        .borderRadius(0)
+
+      Column()
+        .width('100%')
+        .height(112)
+        .linearGradient({
+          angle: 180,
+          colors: [['#00000000', 0], ['#33000000', 1]]
+        })
+        .alignSelf(ItemAlign.End)
+        .borderRadius(0)
+
+      Row({ space: 12 }) {
+        Image(this.avatarUrl)
+          .width(56)
+          .height(56)
+          .objectFit(ImageFit.Cover)
+          .borderRadius(28)
+
+        Column({ space: 4 }) {
+          Text(this.profileNickname)
+            .fontSize(22)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#FFFFFF')
+
+          Text(this.profileSignature)
+            .fontSize(13)
+            .fontColor('#E8F1FF')
+            .maxLines(1)
+
+          Text(`已陪伴 ${this.companionDays} 天 · 练习 ${this.trainedQuestionCount} 题`)
+            .fontSize(12)
+            .fontColor('#DCEBFF')
+            .maxLines(1)
+        }
+        .alignItems(HorizontalAlign.Start)
+      }
+      .padding({ left: 16, right: 16, bottom: 16 })
+      .width('100%')
+    }
+    .width('100%')
+    .height(196)
+    .margin({ left: 0, right: 0, top: -56 })
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+    .shadow({ radius: 20, color: '#15304B2A', offsetX: 0, offsetY: 10 })
+  }
+
+  @Builder
+  private buildCoverOption(cover: string) {
+    Image(cover)
+      .width(86)
+      .height(56)
+      .objectFit(ImageFit.Cover)
+      .borderRadius(12)
+      .border({
+        width: this.profileCoverUrl === cover ? 2 : 0,
+        color: this.profileCoverUrl === cover ? '#2E79F4' : '#00000000'
+      })
+      .onClick(() => {
+        this.profileCoverUrl = cover
+        this.profileTip = '背景头图已切换。'
+        this.profileTipTone = 'normal'
+      })
   }
 
   @Builder

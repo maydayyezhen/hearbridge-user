@@ -17,6 +17,97 @@ export interface SmsLoginData {
   refresh_token: string | null
 }
 
+export interface PasswordRegisterPayload {
+  username: string
+  password: string
+  phone?: string
+  nickname?: string
+}
+
+export interface PasswordLoginPayload {
+  username: string
+  password: string
+}
+
+export interface UserInfoIdentity {
+  id: number
+  userNo: string
+  username: string
+  phone: string | null
+  status: number
+  createdAt: string
+  lastLoginAt: string | null
+}
+
+export interface UserInfoProfile {
+  nickname: string
+  avatarUrl: string
+  coverUrl: string
+  gender: number
+  birthday: string | null
+  signature: string
+}
+
+export interface UserInfoSecurity {
+  hasPassword: boolean
+  phoneBound: boolean
+  passwordUpdatedAt: string | null
+}
+
+export interface UserInfoStats {
+  companionDays: number
+  completedTrainingItemCount: number
+  inProgressTrainingItemCount: number
+  totalTrainingMinutes: number
+  lastTrainingAt: string | null
+}
+
+export interface UserInfoFavorites {
+  favoriteCourseCodes: string[]
+  favoriteTrainingItemIds: number[]
+  favoriteUpdatedAt: string | null
+}
+
+export interface UserInfoRecentCourse {
+  courseCode: string
+  courseName: string
+  coverUrl: string
+  lastLearnAt: string
+  progressPercent: number
+}
+
+export interface AppUserInfoData {
+  identity: UserInfoIdentity
+  profile: UserInfoProfile
+  security: UserInfoSecurity
+  stats: UserInfoStats
+  favorites: UserInfoFavorites
+  recentCourses: UserInfoRecentCourse[]
+}
+
+export interface UpdateUserProfilePayload {
+  nickname?: string
+  gender?: number
+  birthday?: string | null
+  signature?: string
+  avatarUrl?: string
+  coverUrl?: string
+}
+
+export interface UpdateUserProfileData {
+  profile: UserInfoProfile
+}
+
+export interface UpdatePasswordPayload {
+  oldPassword: string
+  newPassword: string
+  confirmPassword: string
+}
+
+export interface UpdatePasswordData {
+  success: boolean
+}
+
 function stringifyResult(result: string | Object | ArrayBuffer): string {
   if (typeof result === 'string') {
     return result
@@ -93,5 +184,81 @@ export async function smsLogin(baseUrl: string, phone: string, code: string): Pr
       phone,
       code
     }
+  })
+}
+
+export async function passwordRegister(baseUrl: string, payload: PasswordRegisterPayload): Promise<ApiResult<SmsLoginData>> {
+  const requestUrl = `${normalizeBaseUrl(baseUrl)}/app/auth/password/register`
+  return requestApi<SmsLoginData>(requestUrl, {
+    method: http.RequestMethod.POST,
+    expectDataType: http.HttpDataType.STRING,
+    usingCache: false,
+    connectTimeout: 10000,
+    readTimeout: 10000,
+    header: {
+      'Content-Type': 'application/json'
+    },
+    extraData: payload
+  })
+}
+
+export async function passwordLogin(baseUrl: string, payload: PasswordLoginPayload): Promise<ApiResult<SmsLoginData>> {
+  const requestUrl = `${normalizeBaseUrl(baseUrl)}/app/auth/password/login`
+  return requestApi<SmsLoginData>(requestUrl, {
+    method: http.RequestMethod.POST,
+    expectDataType: http.HttpDataType.STRING,
+    usingCache: false,
+    connectTimeout: 10000,
+    readTimeout: 10000,
+    header: {
+      'Content-Type': 'application/json'
+    },
+    extraData: payload
+  })
+}
+
+export async function getUserInfo(baseUrl: string, token: string): Promise<ApiResult<AppUserInfoData>> {
+  const requestUrl = `${normalizeBaseUrl(baseUrl)}/app/user/info`
+  return requestApi<AppUserInfoData>(requestUrl, {
+    method: http.RequestMethod.GET,
+    expectDataType: http.HttpDataType.STRING,
+    usingCache: false,
+    connectTimeout: 10000,
+    readTimeout: 10000,
+    header: {
+      token
+    }
+  })
+}
+
+export async function updateUserProfile(baseUrl: string, token: string, payload: UpdateUserProfilePayload): Promise<ApiResult<UpdateUserProfileData>> {
+  const requestUrl = `${normalizeBaseUrl(baseUrl)}/app/user/profile/update`
+  return requestApi<UpdateUserProfileData>(requestUrl, {
+    method: http.RequestMethod.PUT,
+    expectDataType: http.HttpDataType.STRING,
+    usingCache: false,
+    connectTimeout: 10000,
+    readTimeout: 10000,
+    header: {
+      'Content-Type': 'application/json',
+      token
+    },
+    extraData: payload
+  })
+}
+
+export async function updatePassword(baseUrl: string, token: string, payload: UpdatePasswordPayload): Promise<ApiResult<UpdatePasswordData>> {
+  const requestUrl = `${normalizeBaseUrl(baseUrl)}/app/user/password/update`
+  return requestApi<UpdatePasswordData>(requestUrl, {
+    method: http.RequestMethod.PUT,
+    expectDataType: http.HttpDataType.STRING,
+    usingCache: false,
+    connectTimeout: 10000,
+    readTimeout: 10000,
+    header: {
+      'Content-Type': 'application/json',
+      token
+    },
+    extraData: payload
   })
 }

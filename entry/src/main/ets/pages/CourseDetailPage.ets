@@ -1,9 +1,13 @@
+import common from '@ohos.app.ability.common'
+import { readToken } from '../api/AuthStorage'
+import { getCourseDetail } from '../api/CourseApi'
 import { FALLBACK_COVER_URL, TrainingItem, getMockTrainingItems } from './train/TrainData'
 import { CourseTrainingItemList } from './train/components/CourseTrainingItemList'
 import { FocusTagChip } from './train/components/FocusTagChip'
 
 @Component
 export struct CourseDetailPage {
+  @Prop apiBaseUrl: string = ''
   @Prop courseName: string = '课程详情'
   @Prop courseCode: string = ''
   @Prop courseIntro: string = ''
@@ -14,6 +18,13 @@ export struct CourseDetailPage {
   @Prop courseTag3: string = ''
   @Prop isCourseFavorited: boolean = false
   @State isIntroExpanded: boolean = false
+  @State displayCourseName: string = ''
+  @State displayCourseIntro: string = ''
+  @State displayCoverUrl: string = ''
+  @State displayTrainingType: string = 'gesture'
+  @State displayTags: string[] = []
+  @State detailLoading: boolean = false
+  @State detailTip: string = ''
   onBack: () => void = () => {}
   onToggleFavorite: (courseCode: string) => void = (_courseCode: string) => {}
   onStartTraining: (phrase: string) => void = (_phrase: string) => {}
@@ -23,6 +34,75 @@ export struct CourseDetailPage {
   private readonly fallbackCoverUrl: string = FALLBACK_COVER_URL
   private readonly pageScroller: Scroller = new Scroller()
 
+  aboutToAppear() {
+    this.displayCourseName = this.courseName
+    this.displayCourseIntro = this.courseIntro
+    this.displayCoverUrl = this.coverUrl
+    this.displayTrainingType = this.trainingType
+    this.displayTags = this.getPropTags()
+    this.loadCourseDetail()
+  }
+
+  private getAbilityContext(): common.BaseContext {
+    return this.getUIContext().getHostContext() as common.BaseContext
+  }
+
+  private getPropTags(): string[] {
+    const tags: string[] = []
+    if (this.courseTag1.trim().length > 0) {
+      tags.push(this.courseTag1)
+    }
+    if (this.courseTag2.trim().length > 0) {
+      tags.push(this.courseTag2)
+    }
+    if (this.courseTag3.trim().length > 0) {
+      tags.push(this.courseTag3)
+    }
+    return tags
+  }
+
+  private normalizeTrainingType(value: string): string {
+    if (value === 'voice') {
+      return 'speech'
+    }
+    if (value === 'speech') {
+      return 'speech'
+    }
+    return 'gesture'
+  }
+
+  private async loadCourseDetail() {
+    if (this.detailLoading || this.courseCode.trim().length === 0) {
+      return
+    }
+    this.detailLoading = true
+    this.detailTip = '加载课程详情中...'
+    try {
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.detailTip = '登录已过期，请重新登录。'
+        return
+      }
+
+      const result = await getCourseDetail(this.apiBaseUrl, token, this.courseCode)
+      if (!result.ok || !result.data) {
+        this.detailTip = result.message.length > 0 ? result.message : `课程详情加载失败（错误码 ${result.code}）`
+        return
+      }
+
+      this.displayCourseName = result.data.courseName
+      this.displayCourseIntro = result.data.intro
+      this.displayCoverUrl = result.data.coverUrl
+      this.displayTrainingType = this.normalizeTrainingType(result.data.trainingType)
+      this.displayTags = result.data.tags
+      this.detailTip = ''
+    } catch (_error) {
+      this.detailTip = '网络异常，无法加载课程详情。'
+    } finally {
+      this.detailLoading = false
+    }
+  }
+
   build() {
     Column() {
       this.buildHeader()
@@ -30,6 +110,15 @@ export struct CourseDetailPage {
       Scroll(this.pageScroller) {
         Column({ space: 14 }) {
           this.buildHeroCard()
+          if (this.detailLoading) {
+            Text('加载中...')
+              .fontSize(13)
+              .fontColor('#6F83A2')
+          } else if (this.detailTip.length > 0) {
+            Text(this.detailTip)
+              .fontSize(13)
+              .fontColor('#E5484D')
+          }
           this.buildCourseMetaSection(this.getCourseItemCount(), this.getProgressText())
           this.buildActionRow(this.getNextPhrase(), this.getCanContinue())
 
@@ -46,8 +135,6 @@ export struct CourseDetailPage {
         .justifyContent(FlexAlign.Start)
         .alignItems(HorizontalAlign.Start)
         .constraintSize({ minHeight: '100%' })
-        .justifyContent(FlexAlign.Start)
-        .alignItems(HorizontalAlign.Start)
         .padding({ left: 16, right: 16, top: 8, bottom: 0 })
       }
       .width('100%')
@@ -97,7 +184,7 @@ export struct CourseDetailPage {
   @Builder
   private buildHeroCard() {
     Stack({ alignContent: Alignment.Center }) {
-      Image(this.coverUrl.length > 0 ? this.coverUrl : this.fallbackCoverUrl)
+      Image(this.displayCoverUrl.length > 0 ? this.displayCoverUrl : this.fallbackCoverUrl)
         .width('100%')
         .height(186)
         .objectFit(ImageFit.Cover)
@@ -120,7 +207,7 @@ export struct CourseDetailPage {
   @Builder
   private buildCourseMetaSection(itemCount: number, progressText: string) {
     Column({ space: 8 }) {
-      Text(this.courseName)
+      Text(this.displayCourseName)
         .width('100%')
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
@@ -157,9 +244,9 @@ export struct CourseDetailPage {
         .width('100%')
       }
 
-      if (this.getCourseTags().length > 0) {
+      if (this.displayTags.length > 0) {
         Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start, alignItems: ItemAlign.Start }) {
-          ForEach(this.getCourseTags(), (tag: string) => {
+          ForEach(this.displayTags, (tag: string) => {
             FocusTagChip({
               label: tag,
               chipBgColor: '#EEF5FF',
@@ -251,28 +338,14 @@ export struct CourseDetailPage {
   }
 
   private getCourseIntroText(): string {
-    if (this.courseIntro.length > 0) {
-      return this.courseIntro
+    if (this.displayCourseIntro.length > 0) {
+      return this.displayCourseIntro
     }
     return '本课程将带你逐步完成训练目标。'
   }
 
   private shouldShowIntroToggle(): boolean {
     return this.getCourseIntroText().length > 80
-  }
-
-  private getCourseTags(): string[] {
-    const tags: string[] = []
-    if (this.courseTag1.trim().length > 0) {
-      tags.push(this.courseTag1)
-    }
-    if (this.courseTag2.trim().length > 0) {
-      tags.push(this.courseTag2)
-    }
-    if (this.courseTag3.trim().length > 0) {
-      tags.push(this.courseTag3)
-    }
-    return tags
   }
 
   private getCourseTrainingItems(): TrainingItem[] {
@@ -297,9 +370,10 @@ export struct CourseDetailPage {
     if (this.courseCode === 'COURSE-101') {
       return item.id === 1
     }
-    if (this.trainingType === 'gesture') {
+    if (this.displayTrainingType === 'gesture') {
       return item.majorCategoryCode === 'gesture'
     }
     return item.majorCategoryCode === 'voice'
   }
 }
+
