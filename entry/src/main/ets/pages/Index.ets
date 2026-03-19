@@ -1,12 +1,15 @@
 ﻿import common from '@ohos.app.ability.common'
 import { clearToken, readToken, saveToken } from '../api/AuthStorage'
 import { getUserInfo, passwordLogin, passwordRegister, sendSmsCode, smsLogin } from '../api/AuthApi'
+import { addCourseFavorite, addTrainingItemFavorite, FavoriteCourseSummary, FavoriteTrainingItemSummary, removeCourseFavorite, removeTrainingItemFavorite } from '../api/FavoriteApi'
+import { getRecordOverview, RecordRecentCourseDto, RecordTrendDto, RecordTrendPointDto } from '../api/RecordApi'
 import { CourseDetailPage } from './CourseDetailPage'
 import { CourseListPage } from './CourseListPage'
 import { HomePage } from './HomePage'
 import { LoginPage } from './LoginPage'
+import { ApiDebugPanel } from './components/ApiDebugPanel'
 import { ProfilePage } from './ProfilePage'
-import { RecordPage, RecentCourseItem } from './RecordPage'
+import { RecordPage, RecentCourseItem, TrendPointItem } from './RecordPage'
 import { TrainPage } from './TrainPage'
 
 @Entry
@@ -38,6 +41,7 @@ struct Index {
   @State companionDays: number = 0
   @State selectedCourseName: string = '\u65e5\u5e38\u95ee\u5019\u5165\u95e8'
   @State selectedPhrase: string = '你好'
+  @State selectedItemCode: string = ''
   @State selectedCourseCode: string = 'COURSE-101'
   @State selectedTrainEntryStage: string = 'intro'
   @State selectedCourseIntro: string = '\u7528\u4e8e\u57fa\u7840\u95ee\u5019\u8868\u8fbe\u8bad\u7ec3\u3002'
@@ -45,24 +49,37 @@ struct Index {
   @State currentTrainingType: string = 'gesture'
   @State trainView: string = 'courseList'
   @State trainDetailCourseCode: string = ''
+  @State currentTrainingSessionId: number = 0
   @State recordDetailCourseCode: string = ''
-  @State selectedFilter: string = '\u5168\u90e8'
+  @State selectedFilter: string = '周'
   @State selectedGoal: string = '日常交流'
   @State selectedTheme: string = '\u6d77\u76d0\u84dd'
   @State profileView: string = 'main'
   @State notificationsEnabled: boolean = true
   @State vibrationEnabled: boolean = false
   @State isTrainScoring: boolean = false
+  @State showApiDebugDialog: boolean = false
+  @State recordOverviewLoading: boolean = false
+  @State recordOverviewLoaded: boolean = false
+  @State recordTip: string = ''
+  @State recordOverallScore: number = 0
+  @State recordSummaryTitle: string = '学习表现待生成'
+  @State recordSummaryAdvice: string = '进入记录页后将根据后端统计结果展示学习建议。'
+  @State recordTrendPoints: TrendPointItem[] = []
+  @State recordDayTrendPoints: TrendPointItem[] = []
+  @State recordWeekTrendPoints: TrendPointItem[] = []
+  @State recordOverviewTrendPoints: TrendPointItem[] = []
   @State favoriteCourseCodes: string[] = []
-  @State recentCourses: RecentCourseItem[] = [
-    new RecentCourseItem('COURSE-301', '声母训练入门', '03-17 22:05', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/smxlrm.png', 68),
-    new RecentCourseItem('COURSE-101', '\u65e5\u5e38\u95ee\u5019\u5165\u95e8', '03-17 20:41', 'http://192.168.142.128:9001/hearbridge-bucket/20260316/3ad909fc0af94c58a8f2be4ca2fe4cbcChatGPT%20Image%202026%E5%B9%B43%E6%9C%8816%E6%97%A5%2001_25_49.png', 42)
-  ]
+  @State favoriteTrainingItemCodes: string[] = []
+  @State favoriteCourses: FavoriteCourseSummary[] = []
+  @State favoriteTrainingItems: FavoriteTrainingItemSummary[] = []
+  @State recentCourses: RecentCourseItem[] = []
 
   private readonly smsApiBaseUrl: string = 'http://10.133.132.87:8501'
   private countdownTimer: number = -1
 
   aboutToAppear() {
+    AppStorage.setOrCreate('apiDebugText', '暂无 API 调试信息')
     this.initializeAuthState()
   }
 
@@ -102,6 +119,23 @@ struct Index {
       this.profileGender = result.data.profile.gender
       this.profileBirthday = result.data.profile.birthday ?? ''
       this.companionDays = result.data.stats.companionDays
+      this.favoriteCourseCodes = result.data.favorites.favoriteCourseCodes
+      this.favoriteCourses = []
+      for (let i = 0; i < result.data.favorites.favoriteCourses.length; i += 1) {
+        this.favoriteCourses.push(new FavoriteCourseSummary(
+          result.data.favorites.favoriteCourses[i].courseCode,
+          result.data.favorites.favoriteCourses[i].courseName
+        ))
+      }
+      this.favoriteTrainingItems = []
+      this.favoriteTrainingItemCodes = []
+      for (let i = 0; i < result.data.favorites.favoriteTrainingItems.length; i += 1) {
+        this.favoriteTrainingItems.push(new FavoriteTrainingItemSummary(
+          result.data.favorites.favoriteTrainingItems[i].itemCode,
+          result.data.favorites.favoriteTrainingItems[i].itemName
+        ))
+        this.favoriteTrainingItemCodes.push(result.data.favorites.favoriteTrainingItems[i].itemCode)
+      }
 
       if (result.data.profile.avatarUrl.length > 0) {
         this.avatarUrl = result.data.profile.avatarUrl
@@ -118,6 +152,84 @@ struct Index {
 
   private getAbilityContext(): common.BaseContext {
     return this.getUIContext().getHostContext() as common.BaseContext
+  }
+
+  private mapRecordTrendPoints(points: RecordTrendPointDto[]): TrendPointItem[] {
+    const next: TrendPointItem[] = []
+    for (let i = 0; i < points.length; i += 1) {
+      next.push(new TrendPointItem(points[i].label, Number(points[i].score ?? 0)))
+    }
+    return next
+  }
+
+  private getTrendPointsByFilter(filter: string): TrendPointItem[] {
+    if (filter === '日') {
+      return this.recordDayTrendPoints
+    }
+    if (filter === '总览') {
+      return this.recordOverviewTrendPoints
+    }
+    return this.recordWeekTrendPoints
+  }
+
+  private mapTrendGroup(group?: RecordTrendDto): TrendPointItem[] {
+    if (!group || !group.points) {
+      return []
+    }
+    return this.mapRecordTrendPoints(group.points)
+  }
+
+  private mapRecordRecentCourses(recentCourses: RecordRecentCourseDto[]): RecentCourseItem[] {
+    const next: RecentCourseItem[] = []
+    for (let i = 0; i < recentCourses.length; i += 1) {
+      next.push(new RecentCourseItem(
+        recentCourses[i].courseCode,
+        recentCourses[i].courseName,
+        recentCourses[i].lastLearnedAt,
+        recentCourses[i].coverUrl,
+        recentCourses[i].progressPercent
+      ))
+    }
+    return next
+  }
+
+  private async loadRecordOverview(forceReload: boolean = false) {
+    if (this.recordOverviewLoading) {
+      return
+    }
+    if (this.recordOverviewLoaded && !forceReload) {
+      return
+    }
+
+    this.recordOverviewLoading = true
+    this.recordTip = ''
+    try {
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.recordTip = '登录已失效，请重新登录。'
+        return
+      }
+
+      const result = await getRecordOverview(this.smsApiBaseUrl, token)
+      if (!result.ok || !result.data) {
+        this.recordTip = result.message.length > 0 ? result.message : '记录页数据加载失败。'
+        return
+      }
+
+      this.recordOverallScore = Number(result.data.summary.overallScore ?? 0)
+      this.recordSummaryTitle = result.data.summary.summaryTitle ?? '学习表现已更新'
+      this.recordSummaryAdvice = result.data.summary.summaryAdvice ?? '继续保持当前训练节奏。'
+      this.recordDayTrendPoints = this.mapTrendGroup(result.data.trends?.day)
+      this.recordWeekTrendPoints = this.mapTrendGroup(result.data.trends?.week)
+      this.recordOverviewTrendPoints = this.mapTrendGroup(result.data.trends?.overview)
+      this.recordTrendPoints = this.getTrendPointsByFilter(this.selectedFilter)
+      this.recentCourses = this.mapRecordRecentCourses(result.data.recentCourses)
+      this.recordOverviewLoaded = true
+    } catch (_error) {
+      this.recordTip = '网络异常，无法加载学习记录。'
+    } finally {
+      this.recordOverviewLoading = false
+    }
   }
 
   private sanitizePhone(value: string): string {
@@ -352,20 +464,91 @@ struct Index {
     return false
   }
 
-  private toggleCourseFavorite(courseCode: string) {
+  private isTrainingItemFavorited(itemCode: string): boolean {
+    for (let i = 0; i < this.favoriteTrainingItemCodes.length; i += 1) {
+      if (this.favoriteTrainingItemCodes[i] === itemCode) {
+        return true
+      }
+    }
+    return false
+  }
+
+  private setCourseFavoriteState(courseCode: string, favorited: boolean) {
     const next: string[] = []
     let found = false
     for (let i = 0; i < this.favoriteCourseCodes.length; i += 1) {
       if (this.favoriteCourseCodes[i] === courseCode) {
         found = true
-        continue
+        if (!favorited) {
+          continue
+        }
       }
       next.push(this.favoriteCourseCodes[i])
     }
-    if (!found) {
+    if (favorited && !found) {
       next.push(courseCode)
     }
     this.favoriteCourseCodes = next
+  }
+
+  private setTrainingItemFavoriteState(itemCode: string, favorited: boolean) {
+    const next: string[] = []
+    let found = false
+    for (let i = 0; i < this.favoriteTrainingItemCodes.length; i += 1) {
+      if (this.favoriteTrainingItemCodes[i] === itemCode) {
+        found = true
+        if (!favorited) {
+          continue
+        }
+      }
+      next.push(this.favoriteTrainingItemCodes[i])
+    }
+    if (favorited && !found) {
+      next.push(itemCode)
+    }
+    this.favoriteTrainingItemCodes = next
+  }
+
+  private async toggleCourseFavorite(courseCode: string) {
+    try {
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.loginTip = '登录已失效，请重新登录。'
+        return
+      }
+      const favorited = this.isCourseFavorited(courseCode)
+      const result = favorited
+        ? await removeCourseFavorite(this.smsApiBaseUrl, token, courseCode)
+        : await addCourseFavorite(this.smsApiBaseUrl, token, courseCode)
+      if (!result.ok || !result.data?.success) {
+        this.loginTip = result.message.length > 0 ? result.message : '课程收藏操作失败。'
+        return
+      }
+      this.setCourseFavoriteState(courseCode, !favorited)
+    } catch (_error) {
+      this.loginTip = '网络异常，课程收藏失败。'
+    }
+  }
+
+  private async toggleTrainingItemFavorite(itemCode: string) {
+    try {
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.loginTip = '登录已失效，请重新登录。'
+        return
+      }
+      const favorited = this.isTrainingItemFavorited(itemCode)
+      const result = favorited
+        ? await removeTrainingItemFavorite(this.smsApiBaseUrl, token, itemCode)
+        : await addTrainingItemFavorite(this.smsApiBaseUrl, token, itemCode)
+      if (!result.ok || !result.data?.success) {
+        this.loginTip = result.message.length > 0 ? result.message : '训练项收藏操作失败。'
+        return
+      }
+      this.setTrainingItemFavoriteState(itemCode, !favorited)
+    } catch (_error) {
+      this.loginTip = '网络异常，训练项收藏失败。'
+    }
   }
 
   private formatNow(): string {
@@ -451,6 +634,49 @@ struct Index {
   }
 
   @Builder
+  private buildApiDebugFloatingButton() {
+    Button() {
+      SymbolGlyph($r('sys.symbol.info_circle'))
+        .fontSize(18)
+        .fontColor(['#FFFFFF'])
+    }
+    .width(50)
+    .height(50)
+    .backgroundColor('#2E79F4')
+    .borderRadius(25)
+    .shadow({ radius: 20, color: '#2E79F455', offsetX: 0, offsetY: 8 })
+    .stateEffect(false)
+    .position({ x: 300, y: 690 })
+    .zIndex(20)
+    .onClick(() => {
+      this.showApiDebugDialog = true
+    })
+  }
+
+  @Builder
+  private buildApiDebugDialog() {
+    Stack({ alignContent: Alignment.Center }) {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#520A1628')
+        .onClick(() => {
+          this.showApiDebugDialog = false
+        })
+
+      ApiDebugPanel({
+        onClose: () => {
+          this.showApiDebugDialog = false
+        }
+      })
+      .zIndex(1)
+    }
+    .width('100%')
+    .height('100%')
+    .zIndex(30)
+  }
+
+  @Builder
   private buildBottomNav() {
     Column() {
       Row() {
@@ -503,6 +729,9 @@ struct Index {
       if (index === 1) {
         this.trainView = 'courseList'
       }
+      if (index === 2) {
+        this.loadRecordOverview(false)
+      }
       if (index !== 3) {
         this.profileView = 'main'
       }
@@ -550,7 +779,8 @@ struct Index {
             onToggleFavorite: (courseCode: string) => {
               this.toggleCourseFavorite(courseCode)
             },
-            onOpenTrainingItem: (phrase: string, toResult: boolean) => {
+            onOpenTrainingItem: (itemCode: string, phrase: string, toResult: boolean) => {
+              this.selectedItemCode = itemCode
               this.selectedPhrase = phrase
               this.selectedTrainEntryStage = toResult ? 'result' : 'intro'
               this.trainView = 'detail'
@@ -570,6 +800,7 @@ struct Index {
           onOpenCourse: (courseName: string, courseCode: string, phrase: string, toResult: boolean) => {
             this.selectedCourseName = courseName
             this.selectedCourseCode = courseCode
+            this.selectedItemCode = ''
             this.upsertRecentCourse(courseCode, courseName)
             this.selectedPhrase = this.currentTrainingType === 'speech' ? '\u554a' : '\u4f60\u597d'
             this.selectedPhrase = courseCode === 'COURSE-301' ? '\u554a' : this.selectedPhrase
@@ -584,22 +815,29 @@ struct Index {
         }
       } else {
         TrainPage({
+          apiBaseUrl: this.smsApiBaseUrl,
           courseName: this.selectedCourseName,
           courseCode: this.selectedCourseCode,
           trainingType: this.currentTrainingType,
           selectedPhrase: this.selectedPhrase,
+          selectedItemCode: this.selectedItemCode,
           initialStage: this.selectedTrainEntryStage,
           isCourseFavorited: this.isCourseFavorited(this.selectedCourseCode),
+          favoriteTrainingItemCodes: this.favoriteTrainingItemCodes,
           onSelectPhrase: (phrase: string) => {
             this.selectedPhrase = phrase
           },
           onToggleCourseFavorite: (courseCode: string) => {
             this.toggleCourseFavorite(courseCode)
           },
+          onToggleTrainingItemFavorite: (itemCode: string) => {
+            this.toggleTrainingItemFavorite(itemCode)
+          },
           onBackToCourseList: () => {
             this.isTrainScoring = false
             this.trainView = 'courseList'
             this.trainDetailCourseCode = ''
+            this.selectedItemCode = ''
           },
           onCompleteTraining: () => {
             if (this.dailyProgress < 100) {
@@ -631,7 +869,8 @@ struct Index {
           onToggleFavorite: (courseCode: string) => {
             this.toggleCourseFavorite(courseCode)
           },
-          onOpenTrainingItem: (phrase: string, toResult: boolean) => {
+          onOpenTrainingItem: (itemCode: string, phrase: string, toResult: boolean) => {
+            this.selectedItemCode = itemCode
             this.selectedPhrase = phrase
             this.selectedTrainEntryStage = toResult ? 'result' : 'intro'
             this.trainView = 'detail'
@@ -640,12 +879,18 @@ struct Index {
         })
       } else {
         RecordPage({
-          dailyProgress: this.dailyProgress,
-          selectedFilter: this.selectedFilter,
+          overallScore: this.recordOverallScore,
+          summaryTitle: this.recordSummaryTitle,
+          summaryAdvice: this.recordSummaryAdvice,
+                    selectedFilter: this.selectedFilter,
+                    trendPoints: this.recordTrendPoints,
           recentCourses: this.recentCourses,
-          onFilterChange: (filter: string) => {
-            this.selectedFilter = filter
-          },
+          loading: this.recordOverviewLoading,
+          tip: this.recordTip,
+                    onFilterChange: (filter: string) => {
+                      this.selectedFilter = filter
+                      this.recordTrendPoints = this.getTrendPointsByFilter(filter)
+                    },
           onOpenRecentCourse: (courseCode: string) => {
             this.openCourseDetailFromRecord(courseCode)
           },
@@ -671,8 +916,14 @@ struct Index {
         notificationsEnabled: this.notificationsEnabled,
         vibrationEnabled: this.vibrationEnabled,
         favoriteCourseCodes: this.favoriteCourseCodes,
+        favoriteTrainingItemCodes: this.favoriteTrainingItemCodes,
+        favoriteCourses: this.favoriteCourses,
+        favoriteTrainingItems: this.favoriteTrainingItems,
         onOpenSettings: () => {
           this.profileView = 'settings'
+        },
+        onOpenHelpUpload: () => {
+          this.profileView = 'helpUpload'
         },
         onOpenFavorites: () => {
           this.profileView = 'favorites'
@@ -688,12 +939,13 @@ struct Index {
           this.currentTab = 1
           this.profileView = 'main'
         },
-        onOpenFavoriteTrainingItem: (courseCode: string, trainingType: string, phrase: string) => {
+        onOpenFavoriteTrainingItem: (courseCode: string, trainingType: string, itemCode: string, phrase: string) => {
           this.selectedCourseCode = courseCode
           this.selectedCourseName = this.getCourseNameByCode(courseCode)
           this.selectedCourseCoverUrl = this.getCourseCoverUrl(courseCode)
           this.selectedCourseIntro = this.getCourseIntroByCode(courseCode)
           this.currentTrainingType = trainingType
+          this.selectedItemCode = itemCode
           this.selectedPhrase = phrase
           this.selectedTrainEntryStage = 'intro'
           this.trainView = 'detail'
@@ -707,11 +959,17 @@ struct Index {
         onOpenAccountSecurity: () => {
           this.profileView = 'accountSecurity'
         },
+        onOpenPasswordSettings: () => {
+          this.profileView = 'passwordSecurity'
+        },
         onOpenAccountProfile: () => {
           this.profileView = 'accountProfile'
         },
         onBackToSettings: () => {
           this.profileView = 'main'
+        },
+        onBackToAccountSecurity: () => {
+          this.profileView = 'accountSecurity'
         },
         onGoalChange: (goal: string) => {
           this.selectedGoal = goal
@@ -743,89 +1001,105 @@ struct Index {
           this.loginTip = '密码已修改，请重新登录。'
           this.clearCountdownTimer()
           this.codeCountdown = 0
+        },
+        onLogoutSuccess: () => {
+          this.isLoggedIn = false
+          this.currentTab = 0
+          this.profileView = 'main'
+          this.authScene = 'login'
+          this.loginMode = 'password'
+          this.password = ''
+          this.loginTip = '已退出登录。'
+          this.clearCountdownTimer()
+          this.codeCountdown = 0
         }
       })
     }
   }
 
   build() {
-    if (!this.isLoggedIn) {
-      LoginPage({
-        authScene: $authScene,
-        loginMode: $loginMode,
-        phoneNumber: $phoneNumber,
-        verificationCode: $verificationCode,
-        account: $account,
-        password: $password,
-        registerAccount: $registerAccount,
-        registerPassword: $registerPassword,
-        registerConfirmPassword: $registerConfirmPassword,
-        registerPhone: $registerPhone,
-        loginTip: $loginTip,
-        codeCountdown: $codeCountdown,
-        isSendingCode: $isSendingCode,
-        isLoggingIn: $isLoggingIn,
-        apiBaseUrl: this.smsApiBaseUrl,
-        onAuthSceneChange: (value: string) => {
-          this.authScene = value
-          if (value === 'register') {
-            this.loginTip = '\u586b\u5199\u4fe1\u606f\u540e\u5373\u53ef\u5b8c\u6210\u6ce8\u518c'
-            this.clearCountdownTimer()
-            this.codeCountdown = 0
-          } else {
-            this.loginTip = this.loginMode === 'password' ? '\u8bf7\u8f93\u5165\u8d26\u53f7\u548c\u5bc6\u7801\u8fdb\u884c\u767b\u5f55' : '\u8bf7\u8f93\u5165\u624b\u673a\u53f7\u5e76\u83b7\u53d6\u9a8c\u8bc1\u7801\u3002'
-          }
-        },
-        onLoginModeChange: (value: string) => {
-          this.loginMode = value
-          this.loginTip = value === 'password' ? '\u8bf7\u8f93\u5165\u8d26\u53f7\u548c\u5bc6\u7801\u8fdb\u884c\u767b\u5f55' : '\u8bf7\u8f93\u5165\u624b\u673a\u53f7\u5e76\u83b7\u53d6\u9a8c\u8bc1\u7801\u3002'
-          this.clearCountdownTimer()
-          this.codeCountdown = 0
-        },
-        onPhoneChange: (value: string) => {
-          this.phoneNumber = this.sanitizePhone(value)
-        },
-        onCodeChange: (value: string) => {
-          this.verificationCode = this.sanitizeCode(value)
-        },
-        onAccountChange: (value: string) => {
-          this.account = value.trim()
-        },
-        onPasswordChange: (value: string) => {
-          this.password = value
-        },
-        onRegisterAccountChange: (value: string) => {
-          this.registerAccount = value.trim()
-        },
-        onRegisterPasswordChange: (value: string) => {
-          this.registerPassword = value
-        },
-        onRegisterConfirmPasswordChange: (value: string) => {
-          this.registerConfirmPassword = value
-        },
-        onRegisterPhoneChange: (value: string) => {
-          this.registerPhone = this.sanitizePhone(value)
-        },
-        onRequestCode: () => {
-          this.handleRequestCode()
-        },
-        onLogin: () => {
-          this.handleLogin()
-        },
-        onPasswordLogin: () => {
-          this.handlePasswordLogin()
-        },
-        onRegister: () => {
-          this.handleRegisterLocal()
-        },
-        onSkipLogin: () => {
-          this.handleSkipLogin()
-        }
-      })
-    } else {
-      Stack({ alignContent: Alignment.Top }) {
+    Stack({ alignContent: Alignment.TopStart }) {
+      if (!this.isLoggedIn) {
         Column() {
-
+          LoginPage({
+            authScene: $authScene,
+            loginMode: $loginMode,
+            phoneNumber: $phoneNumber,
+            verificationCode: $verificationCode,
+            account: $account,
+            password: $password,
+            registerAccount: $registerAccount,
+            registerPassword: $registerPassword,
+            registerConfirmPassword: $registerConfirmPassword,
+            registerPhone: $registerPhone,
+            loginTip: $loginTip,
+            codeCountdown: $codeCountdown,
+            isSendingCode: $isSendingCode,
+            isLoggingIn: $isLoggingIn,
+            apiBaseUrl: this.smsApiBaseUrl,
+            onAuthSceneChange: (value: string) => {
+              this.authScene = value
+              if (value === 'register') {
+                this.loginTip = '\u586b\u5199\u4fe1\u606f\u540e\u5373\u53ef\u5b8c\u6210\u6ce8\u518c'
+                this.clearCountdownTimer()
+                this.codeCountdown = 0
+              } else {
+                this.loginTip = this.loginMode === 'password' ? '\u8bf7\u8f93\u5165\u8d26\u53f7\u548c\u5bc6\u7801\u8fdb\u884c\u767b\u5f55' : '\u8bf7\u8f93\u5165\u624b\u673a\u53f7\u5e76\u83b7\u53d6\u9a8c\u8bc1\u7801\u3002'
+              }
+            },
+            onLoginModeChange: (value: string) => {
+              this.loginMode = value
+              this.loginTip = value === 'password' ? '\u8bf7\u8f93\u5165\u8d26\u53f7\u548c\u5bc6\u7801\u8fdb\u884c\u767b\u5f55' : '\u8bf7\u8f93\u5165\u624b\u673a\u53f7\u5e76\u83b7\u53d6\u9a8c\u8bc1\u7801\u3002'
+              this.clearCountdownTimer()
+              this.codeCountdown = 0
+            },
+            onPhoneChange: (value: string) => {
+              this.phoneNumber = this.sanitizePhone(value)
+            },
+            onCodeChange: (value: string) => {
+              this.verificationCode = this.sanitizeCode(value)
+            },
+            onAccountChange: (value: string) => {
+              this.account = value.trim()
+            },
+            onPasswordChange: (value: string) => {
+              this.password = value
+            },
+            onRegisterAccountChange: (value: string) => {
+              this.registerAccount = value.trim()
+            },
+            onRegisterPasswordChange: (value: string) => {
+              this.registerPassword = value
+            },
+            onRegisterConfirmPasswordChange: (value: string) => {
+              this.registerConfirmPassword = value
+            },
+            onRegisterPhoneChange: (value: string) => {
+              this.registerPhone = this.sanitizePhone(value)
+            },
+            onRequestCode: () => {
+              this.handleRequestCode()
+            },
+            onLogin: () => {
+              this.handleLogin()
+            },
+            onPasswordLogin: () => {
+              this.handlePasswordLogin()
+            },
+            onRegister: () => {
+              this.handleRegisterLocal()
+            },
+            onSkipLogin: () => {
+              this.handleSkipLogin()
+            }
+          })
+        }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.Start)
+        .alignItems(HorizontalAlign.Start)
+      } else {
+        Column() {
           if (this.currentTab === 1) {
             Column() {
               this.buildCurrentPage()
@@ -880,11 +1154,16 @@ struct Index {
           colors: [['#F7FAFE', 0], ['#EEF4FB', 1]]
         })
         .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-
       }
-      .width('100%')
-      .height('100%')
+
+      this.buildApiDebugFloatingButton()
+
+      if (this.showApiDebugDialog) {
+        this.buildApiDebugDialog()
+      }
     }
+    .width('100%')
+    .height('100%')
   }
 }
 

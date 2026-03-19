@@ -1,9 +1,14 @@
 import common from '@ohos.app.ability.common'
 import { readToken } from '../api/AuthStorage'
 import { getCourseDetail } from '../api/CourseApi'
-import { FALLBACK_COVER_URL, TrainingItem, getMockTrainingItems } from './train/TrainData'
+import { getTrainingSessionDetail, startTrainingSession, TrainingSessionItemDto } from '../api/TrainingApi'
+import { TrainingItem, mapSessionItemToTrainingItem } from './train/TrainData'
 import { CourseTrainingItemList } from './train/components/CourseTrainingItemList'
 import { FocusTagChip } from './train/components/FocusTagChip'
+
+function normalizeDebugBaseUrl(baseUrl: string): string {
+  return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
+}
 
 @Component
 export struct CourseDetailPage {
@@ -25,22 +30,37 @@ export struct CourseDetailPage {
   @State displayTags: string[] = []
   @State detailLoading: boolean = false
   @State detailTip: string = ''
+  @State courseItems: TrainingItem[] = []
+  @State completedItemIds: number[] = []
+  @State currentItemIndex: number = -1
+  @State currentItemStatus: string = ''
+  @State currentItemCode: string = ''
+  @State sessionProgressPercent: number = 0
+  @State completedItemCount: number = 0
+  @State totalItemCount: number = 0
+  @State debugStartJson: string = ''
+  @State debugSessionJson: string = ''
+  @State debugCourseCode: string = ''
+  @State debugTokenPresent: string = 'false'
+  @State debugStartUrl: string = ''
+  @State debugStartMethod: string = 'POST'
+  @State debugStartBody: string = ''
+  @State debugDetailUrl: string = ''
+  @State debugDetailMethod: string = 'GET'
   onBack: () => void = () => {}
   onToggleFavorite: (courseCode: string) => void = (_courseCode: string) => {}
   onStartTraining: (phrase: string) => void = (_phrase: string) => {}
-  onOpenTrainingItem: (phrase: string, toResult: boolean) => void = (_phrase: string, _toResult: boolean) => {}
+  onOpenTrainingItem: (itemCode: string, phrase: string, toResult: boolean) => void = (_itemCode: string, _phrase: string, _toResult: boolean) => {}
 
-  private readonly trainingItems: TrainingItem[] = getMockTrainingItems()
-  private readonly fallbackCoverUrl: string = FALLBACK_COVER_URL
   private readonly pageScroller: Scroller = new Scroller()
 
   aboutToAppear() {
     this.displayCourseName = this.courseName
     this.displayCourseIntro = this.courseIntro
     this.displayCoverUrl = this.coverUrl
-    this.displayTrainingType = this.trainingType
+    this.displayTrainingType = this.normalizeTrainingType(this.trainingType)
     this.displayTags = this.getPropTags()
-    this.loadCourseDetail()
+    this.loadCourseContext()
   }
 
   private getAbilityContext(): common.BaseContext {
@@ -62,44 +82,108 @@ export struct CourseDetailPage {
   }
 
   private normalizeTrainingType(value: string): string {
-    if (value === 'voice') {
-      return 'speech'
-    }
-    if (value === 'speech') {
+    if (value === 'voice' || value === 'speech') {
       return 'speech'
     }
     return 'gesture'
   }
 
-  private async loadCourseDetail() {
+  private async loadCourseContext() {
     if (this.detailLoading || this.courseCode.trim().length === 0) {
       return
     }
     this.detailLoading = true
-    this.detailTip = '加载课程详情中...'
+    this.detailTip = '正在加载课程内容...'
+    this.debugCourseCode = this.courseCode
+    this.debugStartJson = ''
+    this.debugSessionJson = ''
+    this.debugStartUrl = `${normalizeDebugBaseUrl(this.apiBaseUrl)}/app/training/session/start`
+    this.debugDetailUrl = ''
+    this.debugStartBody = JSON.stringify({ courseCode: this.courseCode })
     try {
       const token = await readToken(this.getAbilityContext())
+      this.debugTokenPresent = token.length > 0 ? 'true' : 'false'
       if (token.length === 0) {
-        this.detailTip = '登录已过期，请重新登录。'
+        this.detailTip = '登录已失效，请重新登录。'
         return
       }
 
-      const result = await getCourseDetail(this.apiBaseUrl, token, this.courseCode)
-      if (!result.ok || !result.data) {
-        this.detailTip = result.message.length > 0 ? result.message : `课程详情加载失败（错误码 ${result.code}）`
-        return
+      await this.loadCourseDetail(token)
+      await this.loadTrainingSession(token)
+      if (this.courseItems.length === 0 && this.detailTip.length === 0) {
+        this.detailTip = '当前课程还没有训练项。'
       }
-
-      this.displayCourseName = result.data.courseName
-      this.displayCourseIntro = result.data.intro
-      this.displayCoverUrl = result.data.coverUrl
-      this.displayTrainingType = this.normalizeTrainingType(result.data.trainingType)
-      this.displayTags = result.data.tags
-      this.detailTip = ''
     } catch (_error) {
       this.detailTip = '网络异常，无法加载课程详情。'
     } finally {
       this.detailLoading = false
+    }
+  }
+
+  private async loadCourseDetail(token: string) {
+    const result = await getCourseDetail(this.apiBaseUrl, token, this.courseCode)
+    if (!result.ok || !result.data) {
+      this.detailTip = result.message.length > 0 ? result.message : `课程详情加载失败（错误码 ${result.code}）`
+      return
+    }
+
+    this.displayCourseName = result.data.courseName
+    this.displayCourseIntro = result.data.intro
+    this.displayCoverUrl = result.data.coverUrl
+    this.displayTrainingType = this.normalizeTrainingType(result.data.trainingType)
+    this.displayTags = result.data.tags
+    this.detailTip = ''
+  }
+
+  private async loadTrainingSession(token: string) {
+    const startResult = await startTrainingSession(this.apiBaseUrl, token, this.courseCode)
+    this.debugStartJson = startResult.rawBody
+    if (!startResult.ok || !startResult.data) {
+      this.detailTip = startResult.message.length > 0 ? startResult.message : `训练信息加载失败（错误码 ${startResult.code}）`
+      return
+    }
+
+    this.debugDetailUrl = `${normalizeDebugBaseUrl(this.apiBaseUrl)}/app/training/session/${startResult.data.sessionId}`
+    const detailResult = await getTrainingSessionDetail(this.apiBaseUrl, token, startResult.data.sessionId)
+    if (!detailResult.ok || !detailResult.data) {
+      this.debugSessionJson = detailResult.rawBody
+      this.detailTip = detailResult.message.length > 0 ? detailResult.message : `训练详情加载失败（错误码 ${detailResult.code}）`
+      return
+    }
+
+    this.debugSessionJson = detailResult.rawBody
+    this.sessionProgressPercent = detailResult.data.progressPercent
+    this.completedItemCount = detailResult.data.completedItemCount
+    this.totalItemCount = detailResult.data.totalItemCount
+    this.currentItemCode = detailResult.data.currentItemCode
+    this.currentItemStatus = startResult.data.currentItemStatus
+    this.applySessionItems(detailResult.data.trainingType, detailResult.data.items)
+    this.detailTip = ''
+  }
+
+  private applySessionItems(trainingType: string, items: TrainingSessionItemDto[]) {
+    const mappedItems: TrainingItem[] = []
+    const completedIds: number[] = []
+    let currentIndex = -1
+    for (let i = 0; i < items.length; i += 1) {
+      const mapped = mapSessionItemToTrainingItem(items[i], trainingType, i)
+      mappedItems.push(mapped)
+      if (items[i].status === 'completed') {
+        completedIds.push(mapped.id)
+      }
+      if (items[i].itemCode === this.currentItemCode) {
+        currentIndex = i
+        this.currentItemStatus = items[i].status
+      }
+    }
+    this.courseItems = mappedItems
+    this.completedItemIds = completedIds
+    this.currentItemIndex = currentIndex
+    if (this.totalItemCount <= 0) {
+      this.totalItemCount = mappedItems.length
+    }
+    if (this.completedItemCount <= 0) {
+      this.completedItemCount = completedIds.length
     }
   }
 
@@ -119,23 +203,27 @@ export struct CourseDetailPage {
               .fontSize(13)
               .fontColor('#E5484D')
           }
-          this.buildCourseMetaSection(this.getCourseItemCount(), this.getProgressText())
-          this.buildActionRow(this.getNextPhrase(), this.getCanContinue())
+          this.buildCourseMetaSection()
+          this.buildActionRow()
+          this.buildDebugSection()
 
           CourseTrainingItemList({
-            items: this.getCourseTrainingItems(),
-            completedCount: this.getMockCompletedCount(this.getCourseItemCount()),
+            items: this.courseItems,
+            completedCount: this.completedItemCount,
+            completedItemIds: this.completedItemIds,
+            currentIndex: this.currentItemIndex,
             showHeader: true,
-            onItemClick: (itemName: string, completed: boolean) => {
-              this.onOpenTrainingItem(itemName, completed)
+            onItemCodeClick: (itemCode: string, itemName: string, completed: boolean) => {
+              this.onOpenTrainingItem(itemCode, itemName, completed)
             }
           })
+
         }
         .width('100%')
         .justifyContent(FlexAlign.Start)
         .alignItems(HorizontalAlign.Start)
         .constraintSize({ minHeight: '100%' })
-        .padding({ left: 16, right: 16, top: 8, bottom: 0 })
+        .padding({ left: 16, right: 16, top: 8, bottom: 64 })
       }
       .width('100%')
       .layoutWeight(1)
@@ -184,11 +272,22 @@ export struct CourseDetailPage {
   @Builder
   private buildHeroCard() {
     Stack({ alignContent: Alignment.Center }) {
-      Image(this.displayCoverUrl.length > 0 ? this.displayCoverUrl : this.fallbackCoverUrl)
-        .width('100%')
-        .height(186)
-        .objectFit(ImageFit.Cover)
-        .borderRadius(22)
+      if (this.displayCoverUrl.length > 0) {
+        Image(this.displayCoverUrl)
+          .width('100%')
+          .height(186)
+          .objectFit(ImageFit.Cover)
+          .borderRadius(22)
+      } else {
+        Column()
+          .width('100%')
+          .height(186)
+          .linearGradient({
+            angle: 135,
+            colors: [['#DCEBFF', 0], ['#BBD6FF', 1]]
+          })
+          .borderRadius(22)
+      }
 
       Column()
         .width('100%')
@@ -205,7 +304,7 @@ export struct CourseDetailPage {
   }
 
   @Builder
-  private buildCourseMetaSection(itemCount: number, progressText: string) {
+  private buildCourseMetaSection() {
     Column({ space: 8 }) {
       Text(this.displayCourseName)
         .width('100%')
@@ -244,6 +343,13 @@ export struct CourseDetailPage {
         .width('100%')
       }
 
+      Row({ space: 10 }) {
+        this.buildStatPill('训练项', `${this.totalItemCount}`)
+        this.buildStatPill('已完成', `${this.completedItemCount}`)
+        this.buildStatPill('进度', `${Math.round(this.sessionProgressPercent)}%`)
+      }
+      .width('100%')
+
       if (this.displayTags.length > 0) {
         Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start, alignItems: ItemAlign.Start }) {
           ForEach(this.displayTags, (tag: string) => {
@@ -263,7 +369,112 @@ export struct CourseDetailPage {
   }
 
   @Builder
-  private buildActionRow(nextPhrase: string, canContinue: boolean) {
+  private buildStatPill(label: string, value: string) {
+    Column({ space: 4 }) {
+      Text(value)
+        .fontSize(16)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#1F2A44')
+
+      Text(label)
+        .fontSize(11)
+        .fontColor('#7A8CA7')
+    }
+    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+    .backgroundColor('#F7FAFF')
+    .borderRadius(14)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private buildDebugSection() {
+    Column({ space: 8 }) {
+      Text('调试返回')
+        .width('100%')
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#1F2A44')
+
+      Text(`courseCode: ${this.debugCourseCode}`)
+        .width('100%')
+        .fontSize(11)
+        .lineHeight(16)
+        .fontColor('#5F718B')
+        .textAlign(TextAlign.Start)
+        .fontFamily('monospace')
+
+      Text(`token present: ${this.debugTokenPresent}`)
+        .width('100%')
+        .fontSize(11)
+        .lineHeight(16)
+        .fontColor('#5F718B')
+        .textAlign(TextAlign.Start)
+        .fontFamily('monospace')
+
+      Text(`start method: ${this.debugStartMethod}`)
+        .width('100%')
+        .fontSize(11)
+        .lineHeight(16)
+        .fontColor('#5F718B')
+        .textAlign(TextAlign.Start)
+        .fontFamily('monospace')
+
+      Text(`start url: ${this.debugStartUrl}`)
+        .width('100%')
+        .fontSize(11)
+        .lineHeight(16)
+        .fontColor('#5F718B')
+        .textAlign(TextAlign.Start)
+        .fontFamily('monospace')
+
+      Text(`start body: ${this.debugStartBody}`)
+        .width('100%')
+        .fontSize(11)
+        .lineHeight(16)
+        .fontColor('#5F718B')
+        .textAlign(TextAlign.Start)
+        .fontFamily('monospace')
+
+      Text(`start: ${this.debugStartJson.length > 0 ? this.debugStartJson : '无返回'}`)
+        .width('100%')
+        .fontSize(11)
+        .lineHeight(16)
+        .fontColor('#5F718B')
+        .textAlign(TextAlign.Start)
+        .fontFamily('monospace')
+
+      Text(`detail method: ${this.debugDetailMethod}`)
+        .width('100%')
+        .fontSize(11)
+        .lineHeight(16)
+        .fontColor('#5F718B')
+        .textAlign(TextAlign.Start)
+        .fontFamily('monospace')
+
+      Text(`detail url: ${this.debugDetailUrl.length > 0 ? this.debugDetailUrl : '无返回'}`)
+        .width('100%')
+        .fontSize(11)
+        .lineHeight(16)
+        .fontColor('#5F718B')
+        .textAlign(TextAlign.Start)
+        .fontFamily('monospace')
+
+      Text(`detail: ${this.debugSessionJson.length > 0 ? this.debugSessionJson : '无返回'}`)
+        .width('100%')
+        .fontSize(11)
+        .lineHeight(16)
+        .fontColor('#5F718B')
+        .textAlign(TextAlign.Start)
+        .fontFamily('monospace')
+    }
+    .width('100%')
+    .padding(12)
+    .backgroundColor('#F7FAFF')
+    .borderRadius(16)
+  }
+
+  @Builder
+  private buildActionRow() {
     Row() {
       Button() {
         Row({ space: 6 }) {
@@ -289,7 +500,7 @@ export struct CourseDetailPage {
 
       Blank()
 
-      Button(canContinue ? '继续练习' : '开始练习')
+      Button(this.getCanContinue() ? '继续练习' : '开始练习')
         .width(212)
         .height(46)
         .fontSize(15)
@@ -301,40 +512,59 @@ export struct CourseDetailPage {
         })
         .borderRadius(16)
         .onClick(() => {
-          this.onOpenTrainingItem(nextPhrase, false)
+          this.onOpenTrainingItem(this.getNextItemCode(), this.getNextPhrase(), this.shouldOpenResultForNextPhrase())
         })
     }
     .width('100%')
   }
 
-  private getMockCompletedCount(totalCount: number): number {
-    if (this.courseCode === 'COURSE-301') {
-      return Math.min(3, totalCount)
+  private getNextItemCode(): string {
+    if (this.courseItems.length === 0) {
+      return ''
     }
-    return 0
+    const nextIndex = this.findNextOpenItemIndex()
+    return this.courseItems[nextIndex >= 0 ? nextIndex : this.courseItems.length - 1].code
   }
 
   private getNextPhrase(): string {
-    const items = this.getCourseTrainingItems()
-    const completedCount = this.getMockCompletedCount(items.length)
-    if (items.length === 0) {
+    if (this.courseItems.length === 0) {
       return '你好'
     }
-    const nextIndex = Math.min(completedCount, items.length - 1)
-    return items[nextIndex].name
+    const nextIndex = this.findNextOpenItemIndex()
+    return this.courseItems[nextIndex >= 0 ? nextIndex : this.courseItems.length - 1].name
   }
 
-  private getCourseItemCount(): number {
-    return this.getCourseTrainingItems().length
+  private shouldOpenResultForNextPhrase(): boolean {
+    if (this.courseItems.length === 0) {
+      return false
+    }
+    const nextIndex = this.findNextOpenItemIndex()
+    if (nextIndex >= 0) {
+      return false
+    }
+    return true
+  }
+
+  private findNextOpenItemIndex(): number {
+    for (let i = 0; i < this.courseItems.length; i += 1) {
+      if (!this.isCompletedId(this.courseItems[i].id)) {
+        return i
+      }
+    }
+    return -1
+  }
+
+  private isCompletedId(itemId: number): boolean {
+    for (let i = 0; i < this.completedItemIds.length; i += 1) {
+      if (this.completedItemIds[i] === itemId) {
+        return true
+      }
+    }
+    return false
   }
 
   private getCanContinue(): boolean {
-    return this.getMockCompletedCount(this.getCourseItemCount()) > 0
-  }
-
-  private getProgressText(): string {
-    const total = this.getCourseItemCount()
-    return `${this.getMockCompletedCount(total)}/${total}`
+    return this.completedItemCount > 0 || this.currentItemIndex >= 0
   }
 
   private getCourseIntroText(): string {
@@ -347,33 +577,4 @@ export struct CourseDetailPage {
   private shouldShowIntroToggle(): boolean {
     return this.getCourseIntroText().length > 80
   }
-
-  private getCourseTrainingItems(): TrainingItem[] {
-    const result: TrainingItem[] = []
-    for (let i = 0; i < this.trainingItems.length; i += 1) {
-      const item = this.trainingItems[i]
-      if (this.isItemMatchedToCourse(item)) {
-        result.push(item)
-      }
-    }
-    result.sort((a: TrainingItem, b: TrainingItem) => a.sortNum - b.sortNum)
-    return result
-  }
-
-  private isItemMatchedToCourse(item: TrainingItem): boolean {
-    if (this.courseCode === 'COURSE-301') {
-      return item.majorCategoryCode === 'voice' && item.code.startsWith('VOI_')
-    }
-    if (this.courseCode === 'COURSE-302') {
-      return item.id === 3
-    }
-    if (this.courseCode === 'COURSE-101') {
-      return item.id === 1
-    }
-    if (this.displayTrainingType === 'gesture') {
-      return item.majorCategoryCode === 'gesture'
-    }
-    return item.majorCategoryCode === 'voice'
-  }
 }
-

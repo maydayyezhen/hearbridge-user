@@ -1,4 +1,5 @@
 import http from '@ohos.net.http'
+import { recordApiDebug, stringifyDebugBody } from './ApiDebug'
 
 export interface ApiEnvelope<T> {
   code: number
@@ -80,13 +81,18 @@ function parseEnvelope<T>(httpCode: number, rawBody: string): ApiResult<T> {
   }
 }
 
-async function requestApi<T>(url: string, options: http.HttpRequestOptions): Promise<ApiResult<T>> {
+async function requestApi<T>(url: string, options: http.HttpRequestOptions, debugMethod: string, hasToken: boolean,
+  debugBody: string): Promise<ApiResult<T>> {
   const request = http.createHttp()
   try {
     const response = await request.request(url, options)
     const httpCode = Number(response.responseCode)
     const rawBody = stringifyResult(response.result)
+    recordApiDebug('CourseApi', debugMethod, url, hasToken, debugBody, rawBody)
     return parseEnvelope<T>(httpCode, rawBody)
+  } catch (error) {
+    recordApiDebug('CourseApi', debugMethod, url, hasToken, debugBody, `request error: ${JSON.stringify(error)}`)
+    throw new Error(JSON.stringify(error))
   } finally {
     request.destroy()
   }
@@ -134,7 +140,7 @@ export async function getCourseList(baseUrl: string, token: string, query: Cours
     header: {
       token
     }
-  })
+  }, 'GET', token.length > 0, stringifyDebugBody(query))
 }
 
 export async function getCourseDetail(baseUrl: string, token: string, courseCode: string): Promise<ApiResult<CourseDetailData>> {
@@ -148,6 +154,5 @@ export async function getCourseDetail(baseUrl: string, token: string, courseCode
     header: {
       token
     }
-  })
+  }, 'GET', token.length > 0, 'none')
 }
-

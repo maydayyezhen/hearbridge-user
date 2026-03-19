@@ -9,11 +9,22 @@ export struct IntroStageContent {
   build() {
     Column({ space: 16 }) {
       Stack({ alignContent: Alignment.BottomStart }) {
-        Image(this.coverUrl)
-          .width('100%')
-          .height(188)
-          .objectFit(ImageFit.Cover)
-          .borderRadius(20)
+        if (this.coverUrl.length > 0) {
+          Image(this.coverUrl)
+            .width('100%')
+            .height(188)
+            .objectFit(ImageFit.Cover)
+            .borderRadius(20)
+        } else {
+          Column()
+            .width('100%')
+            .height(188)
+            .linearGradient({
+              angle: 135,
+              colors: [['#DCEBFF', 0], ['#BBD6FF', 1]]
+            })
+            .borderRadius(20)
+        }
 
         Column() {
         }

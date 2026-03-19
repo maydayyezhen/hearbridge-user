@@ -9,6 +9,7 @@ export struct CourseTrainingItemList {
   @Prop showHeader: boolean = true
   @Prop isCard: boolean = true
   onItemClick: (itemName: string, completed: boolean) => void = (_itemName: string, _completed: boolean) => {}
+  onItemCodeClick: (itemCode: string, itemName: string, completed: boolean) => void = (_itemCode: string, _itemName: string, _completed: boolean) => {}
   onItemIdClick: (itemId: number, completed: boolean) => void = (_itemId: number, _completed: boolean) => {}
 
   build() {
@@ -66,8 +67,10 @@ export struct CourseTrainingItemList {
     .backgroundColor(this.isCurrentIndex(index) ? '#EDF4FF' : '#F7FAFF')
     .borderRadius(10)
     .onClick(() => {
-      this.onItemClick(item.name, this.isCompleted(item.id, index))
-      this.onItemIdClick(item.id, this.isCompleted(item.id, index))
+      const completed = this.isCompleted(item.id, index)
+      this.onItemClick(item.name, completed)
+      this.onItemCodeClick(item.code, item.name, completed)
+      this.onItemIdClick(item.id, completed)
     })
   }
 

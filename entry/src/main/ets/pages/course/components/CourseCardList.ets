@@ -2,6 +2,36 @@ import { CourseItem } from '../CourseModels'
 import { FocusTagChip } from '../../train/components/FocusTagChip'
 
 @Component
+struct CourseCoverImage {
+  @Prop coverUrl: string = ''
+  @Prop placeholderIndex: number = 1
+  @State currentUrl: string = ''
+
+  aboutToAppear() {
+    if (this.coverUrl.trim().length > 0) {
+      this.currentUrl = this.coverUrl
+    } else {
+      this.currentUrl = this.getPlaceholderUrl()
+    }
+  }
+
+  build() {
+    Image(this.currentUrl)
+      .width(136)
+      .height(76)
+      .objectFit(ImageFit.Cover)
+      .borderRadius(12)
+      .onError(() => {
+        this.currentUrl = this.getPlaceholderUrl()
+      })
+  }
+
+  private getPlaceholderUrl(): string {
+    return `https://placehold.co/400x240/png?text=Course+${this.placeholderIndex}`
+  }
+}
+
+@Component
 export struct CourseCardList {
   @Prop courses: CourseItem[] = []
   @Prop trainingType: string = 'gesture'
@@ -83,11 +113,10 @@ export struct CourseCardList {
   @Builder
   private buildCourseCard(course: CourseItem) {
     Row({ space: 18 }) {
-      Image(course.coverUrl)
-        .width(136)
-        .height(76)
-        .objectFit(ImageFit.Cover)
-        .borderRadius(12)
+      CourseCoverImage({
+        coverUrl: course.coverUrl,
+        placeholderIndex: course.id
+      })
 
       Column({ space: 8 }) {
         Row({ space: 8 }) {

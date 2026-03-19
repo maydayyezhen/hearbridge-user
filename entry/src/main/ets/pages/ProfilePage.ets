@@ -1,7 +1,10 @@
-import common from '@ohos.app.ability.common'
+﻿import common from '@ohos.app.ability.common'
 import { clearToken, readToken } from '../api/AuthStorage'
-import { updatePassword, updateUserProfile } from '../api/AuthApi'
+import { logout, updatePassword, updateUserProfile } from '../api/AuthApi'
+import { FavoriteCourseSummary, FavoriteTrainingItemSummary } from '../api/FavoriteApi'
+import { uploadFileToServer } from '../api/FileUploadApi'
 import photoAccessHelper from '@ohos.file.photoAccessHelper'
+import { HelpUploadPage } from './HelpUploadPage'
 
 class FavoriteDisplayItem {
   id: string
@@ -37,6 +40,9 @@ export struct ProfilePage {
   @Prop notificationsEnabled: boolean = true
   @Prop vibrationEnabled: boolean = false
   @Prop favoriteCourseCodes: string[] = []
+  @Prop favoriteTrainingItemCodes: string[] = []
+  @Prop favoriteCourses: FavoriteCourseSummary[] = []
+  @Prop favoriteTrainingItems: FavoriteTrainingItemSummary[] = []
 
   @State selectedAvatarUrl: string = ''
   @State avatarTip: string = '可选择预设头像或从本地相册选择后上传。'
@@ -69,21 +75,28 @@ export struct ProfilePage {
   @State passwordTip: string = '密码需至少 8 位，建议包含字母和数字。'
   @State passwordTipTone: string = 'normal'
   @State isUpdatingPassword: boolean = false
+  @State logoutTip: string = ''
+  @State logoutTipTone: string = 'normal'
+  @State isLoggingOut: boolean = false
 
   onOpenSettings: () => void = () => {}
+  onOpenHelpUpload: () => void = () => {}
   onOpenFavorites: () => void = () => {}
   onOpenAccountSecurity: () => void = () => {}
+  onOpenPasswordSettings: () => void = () => {}
   onOpenAccountProfile: () => void = () => {}
   onCloseSettings: () => void = () => {}
   onBackToSettings: () => void = () => {}
+  onBackToAccountSecurity: () => void = () => {}
   onOpenFavoriteCourse: (courseCode: string) => void = () => {}
-  onOpenFavoriteTrainingItem: (courseCode: string, trainingType: string, phrase: string) => void = () => {}
+  onOpenFavoriteTrainingItem: (courseCode: string, trainingType: string, itemCode: string, phrase: string) => void = () => {}
   onGoalChange: (goal: string) => void = () => {}
   onThemeChange: (theme: string) => void = () => {}
   onNotificationsChange: (value: boolean) => void = () => {}
   onVibrationChange: (value: boolean) => void = () => {}
   onProfileUpdated: (nickname: string, signature: string, coverUrl: string, gender: number, birthday: string, avatarUrl: string) => void = () => {}
   onPasswordUpdatedLogout: () => void = () => {}
+  onLogoutSuccess: () => void = () => {}
 
   private readonly avatarOptions: string[] = [
     'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&q=80',
@@ -158,6 +171,12 @@ export struct ProfilePage {
             }
             .width('100%')
             .padding({ left: 16, right: 16, top: 6 })
+          } else if (this.currentView === 'passwordSecurity') {
+            Column() {
+              this.buildPasswordSecurity()
+            }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 6 })
           } else if (this.currentView === 'accountProfile') {
             Column() {
               this.buildAccountProfile()
@@ -170,6 +189,13 @@ export struct ProfilePage {
             }
             .width('100%')
             .padding({ left: 16, right: 16, top: 6 })
+          } else if (this.currentView === 'helpUpload') {
+            HelpUploadPage({
+              apiBaseUrl: this.apiBaseUrl,
+              onBack: () => {
+                this.onBackToSettings()
+              }
+            })
           } else {
             this.buildProfileOverview()
           }
@@ -217,7 +243,9 @@ export struct ProfilePage {
       this.buildMenuRow($r('sys.symbol.lock'), '账号与安全', () => {
         this.onOpenAccountSecurity()
       })
-      this.buildMenuRow($r('sys.symbol.questionmark_circle'), '帮助与反馈')
+      this.buildMenuRow($r('sys.symbol.questionmark_circle'), '帮助与反馈', () => {
+        this.onOpenHelpUpload()
+      })
       this.buildMenuRow($r('sys.symbol.info_circle'), '关于 HearBridge')
     }
     .width('100%')
@@ -253,7 +281,7 @@ export struct ProfilePage {
           } else {
             ForEach(this.getFavoriteTrainingItems(), (item: FavoriteDisplayItem) => {
               this.buildFavoriteRow(item, () => {
-                this.onOpenFavoriteTrainingItem(item.courseCode, item.trainingType, item.phrase)
+                this.onOpenFavoriteTrainingItem(item.courseCode, item.trainingType, item.id, item.phrase)
               })
             }, (item: FavoriteDisplayItem) => item.id)
           }
@@ -457,17 +485,44 @@ export struct ProfilePage {
   @Builder
   private buildAccountSecurity() {
     Column({ space: 18 }) {
-      this.buildPageHeader('账号与安全', '修改登录密码与安全信息', () => {
+      this.buildPageHeader('账号与安全', '管理登录密码与退出登录', () => {
         this.onBackToSettings()
       })
 
       Column({ space: 14 }) {
-        Text('修改密码')
-          .width('100%')
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#1F2A44')
+        this.buildMenuRow($r('sys.symbol.lock'), '修改密码', () => {
+          this.onOpenPasswordSettings()
+        })
 
+        this.buildMenuRow($r('sys.symbol.power'), this.isLoggingOut ? '退出中...' : '退出登录', () => {
+          this.handleLogout()
+        })
+
+        if (this.logoutTip.length > 0) {
+          Text(this.logoutTip)
+            .width('100%')
+            .fontSize(12)
+            .fontColor(this.getTipColor(this.logoutTipTone))
+            .lineHeight(18)
+        }
+      }
+      .width('100%')
+      .padding(18)
+      .backgroundColor('#FFFFFF')
+      .borderRadius(28)
+      .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
+    }
+    .width('100%')
+  }
+
+  @Builder
+  private buildPasswordSecurity() {
+    Column({ space: 18 }) {
+      this.buildPageHeader('修改密码', '请输入当前密码并设置新密码', () => {
+        this.onBackToAccountSecurity()
+      })
+
+      Column({ space: 14 }) {
         this.buildInput('当前密码', '请输入当前密码', this.currentPassword, (value: string) => {
           this.currentPassword = value
         })
@@ -530,8 +585,74 @@ export struct ProfilePage {
     this.submitPasswordChange()
   }
 
+  private async handleLogout() {
+    if (this.isLoggingOut) {
+      return
+    }
+    this.isLoggingOut = true
+    this.logoutTip = '正在退出登录...'
+    this.logoutTipTone = 'normal'
+    try {
+      const token = await readToken(this.getAbilityContext())
+      if (token.length > 0) {
+        const result = await logout(this.apiBaseUrl, token)
+        if (!result.ok) {
+          this.logoutTip = result.message.length > 0 ? result.message : '退出登录失败，请稍后重试。'
+          this.logoutTipTone = 'error'
+          return
+        }
+      }
+      await clearToken(this.getAbilityContext())
+      this.logoutTip = '已退出登录。'
+      this.logoutTipTone = 'success'
+      this.onLogoutSuccess()
+    } catch (_error) {
+      this.logoutTip = '网络异常，退出登录失败。'
+      this.logoutTipTone = 'error'
+    } finally {
+      this.isLoggingOut = false
+    }
+  }
+
   private getAbilityContext(): common.BaseContext {
     return this.getUIContext().getHostContext() as common.BaseContext
+  }
+
+  private normalizeUri(uri: string): string {
+    return uri.split('#')[0].split('?')[0]
+  }
+
+  private getFileName(uri: string, fallbackName: string): string {
+    const cleanUri = this.normalizeUri(uri)
+    const lastSlash = cleanUri.lastIndexOf('/')
+    if (lastSlash >= 0 && lastSlash < cleanUri.length - 1) {
+      return cleanUri.substring(lastSlash + 1)
+    }
+    return fallbackName
+  }
+
+  private isRemoteResource(uri: string): boolean {
+    return uri.indexOf('http://') === 0 || uri.indexOf('https://') === 0
+  }
+
+  private async uploadProfileImageIfNeeded(token: string, fileUri: string, fallbackName: string): Promise<string> {
+    if (fileUri.length === 0 || this.isRemoteResource(fileUri)) {
+      return fileUri
+    }
+
+    const uploadResult = await uploadFileToServer(
+      this.getAbilityContext() as common.UIAbilityContext,
+      this.apiBaseUrl,
+      token,
+      fileUri,
+      this.getFileName(fileUri, fallbackName),
+      'image/jpeg'
+    )
+
+    if (!uploadResult.ok || !uploadResult.data) {
+      throw new Error(uploadResult.message.length > 0 ? uploadResult.message : '图片上传失败')
+    }
+    return uploadResult.data
   }
 
   private resolveGenderCode(): number {
@@ -591,14 +712,19 @@ export struct ProfilePage {
         return
       }
 
-      const nextAvatarUrl = this.selectedAvatarUrl.length > 0 ? this.selectedAvatarUrl : this.avatarUrl
+      const localAvatarUrl = this.selectedAvatarUrl.length > 0 ? this.selectedAvatarUrl : this.avatarUrl
+      const nextAvatarUrl = await this.uploadProfileImageIfNeeded(token, localAvatarUrl, 'avatar.jpg')
+      const nextCoverUrl = await this.uploadProfileImageIfNeeded(token, this.profileCoverUrl, 'cover.jpg')
+      this.selectedAvatarUrl = nextAvatarUrl
+      this.avatarUrl = nextAvatarUrl
+      this.profileCoverUrl = nextCoverUrl
       const result = await updateUserProfile(this.apiBaseUrl, token, {
         nickname,
         gender: this.resolveGenderCode(),
         birthday: this.profileBirthday.length > 0 ? this.profileBirthday : null,
         signature: this.profileSignature,
         avatarUrl: nextAvatarUrl,
-        coverUrl: this.profileCoverUrl
+        coverUrl: nextCoverUrl
       })
       if (!result.ok || !result.data) {
         result.message = this.resolveProfileUpdateError(result.code, result.message)
@@ -688,12 +814,29 @@ export struct ProfilePage {
       return
     }
     this.isUploadingAvatar = true
-    this.avatarTip = '头像已就绪，点击“保存资料”后提交到服务端。'
+    this.avatarTip = '正在上传头像...'
     this.avatarTipTone = 'normal'
     try {
-      this.avatarUrl = this.selectedAvatarUrl
+      if (this.isRemoteResource(this.selectedAvatarUrl)) {
+        this.avatarUrl = this.selectedAvatarUrl
+        this.avatarTip = '头像已设置，记得保存资料。'
+        this.avatarTipTone = 'success'
+        return
+      }
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.avatarTip = '登录状态已失效，请重新登录。'
+        this.avatarTipTone = 'error'
+        return
+      }
+      const uploadedUrl = await this.uploadProfileImageIfNeeded(token, this.selectedAvatarUrl, 'avatar.jpg')
+      this.selectedAvatarUrl = uploadedUrl
+      this.avatarUrl = uploadedUrl
       this.avatarTip = '头像已设置，记得保存资料。'
       this.avatarTipTone = 'success'
+    } catch (error) {
+      this.avatarTip = error instanceof Error ? error.message : '头像上传失败，请稍后重试。'
+      this.avatarTipTone = 'error'
     } finally {
       this.isUploadingAvatar = false
     }
@@ -713,7 +856,7 @@ export struct ProfilePage {
       pickerOptions.maxSelectNumber = 1
       const pickerResult = await photoPicker.select(pickerOptions)
       if (pickerResult.photoUris.length > 0) {
-        this.selectedAvatarUrl = pickerResult.photoUris[0]
+        this.selectedAvatarUrl = this.normalizeUri(pickerResult.photoUris[0])
         this.avatarTip = '已选择图片，点击“上传头像”保存。'
         this.avatarTipTone = 'normal'
       } else {
@@ -740,8 +883,8 @@ export struct ProfilePage {
       pickerOptions.maxSelectNumber = 1
       const pickerResult = await photoPicker.select(pickerOptions)
       if (pickerResult.photoUris.length > 0) {
-        this.profileCoverUrl = pickerResult.photoUris[0]
-        this.profileTip = '背景头图已更新（本地模拟）。'
+        this.profileCoverUrl = this.normalizeUri(pickerResult.photoUris[0])
+        this.profileTip = '背景图已选择，保存资料时会自动上传。'
         this.profileTipTone = 'success'
       }
     } catch (_error) {
@@ -942,6 +1085,21 @@ export struct ProfilePage {
 
   private getFavoriteCourseItems(): FavoriteDisplayItem[] {
     const items: FavoriteDisplayItem[] = []
+    if (this.favoriteCourses.length > 0) {
+      for (let i = 0; i < this.favoriteCourses.length; i += 1) {
+        const course = this.favoriteCourses[i]
+        items.push(new FavoriteDisplayItem(
+          course.courseCode,
+          course.courseName,
+          course.courseCode,
+          course.courseCode,
+          this.getCourseTrainingTypeByCode(course.courseCode),
+          ''
+        ))
+      }
+      return items
+    }
+
     for (let i = 0; i < this.favoriteCourseCodes.length; i += 1) {
       const code = this.favoriteCourseCodes[i]
       items.push(new FavoriteDisplayItem(code, this.getCourseNameByCode(code), code, code, this.getCourseTrainingTypeByCode(code), ''))
@@ -951,10 +1109,70 @@ export struct ProfilePage {
 
   private getFavoriteTrainingItems(): FavoriteDisplayItem[] {
     const items: FavoriteDisplayItem[] = []
-    items.push(new FavoriteDisplayItem('item-1', '你好', '口语训练 · 声母训练入门', 'COURSE-301', 'speech', '你好'))
-    items.push(new FavoriteDisplayItem('item-2', '阿', '口语训练 · 声母训练入门', 'COURSE-301', 'speech', '阿'))
-    items.push(new FavoriteDisplayItem('item-3', '手势问候', '手势训练 · 日常问候入门', 'COURSE-101', 'gesture', '你好'))
+    if (this.favoriteTrainingItems.length > 0) {
+      for (let i = 0; i < this.favoriteTrainingItems.length; i += 1) {
+        const item = this.favoriteTrainingItems[i]
+        const courseCode = this.getCourseCodeByTrainingItemCode(item.itemCode)
+        const trainingType = this.getTrainingTypeByTrainingItemCode(item.itemCode)
+        items.push(new FavoriteDisplayItem(
+          item.itemCode,
+          item.itemName,
+          `${trainingType === 'speech' ? '口语训练' : '手势训练'} · ${this.getCourseNameByCode(courseCode)}`,
+          courseCode,
+          trainingType,
+          item.itemName
+        ))
+      }
+      return items
+    }
+
+    for (let i = 0; i < this.favoriteTrainingItemCodes.length; i += 1) {
+      const code = this.favoriteTrainingItemCodes[i]
+      const courseCode = this.getCourseCodeByTrainingItemCode(code)
+      const trainingType = this.getTrainingTypeByTrainingItemCode(code)
+      items.push(new FavoriteDisplayItem(
+        code,
+        this.getTrainingItemNameByCode(code),
+        `${trainingType === 'speech' ? '口语训练' : '手势训练'} · ${this.getCourseNameByCode(courseCode)}`,
+        courseCode,
+        trainingType,
+        this.getTrainingItemNameByCode(code)
+      ))
+    }
     return items
+  }
+
+  private getCourseCodeByTrainingItemCode(itemCode: string): string {
+    if (itemCode.indexOf('VOI_') === 0 || itemCode.indexOf('VOICE_') === 0) {
+      return 'COURSE-301'
+    }
+    return 'COURSE-101'
+  }
+
+  private getTrainingTypeByTrainingItemCode(itemCode: string): string {
+    if (itemCode.indexOf('VOI_') === 0 || itemCode.indexOf('VOICE_') === 0) {
+      return 'speech'
+    }
+    return 'gesture'
+  }
+
+  private getTrainingItemNameByCode(itemCode: string): string {
+    if (itemCode === 'VOI_001') {
+      return '你好'
+    }
+    if (itemCode === 'VOICE_A') {
+      return '阿'
+    }
+    if (itemCode === 'VOICE_FOLLOW_HELLO') {
+      return '跟读你好'
+    }
+    if (itemCode === 'GESTURE_HELLO') {
+      return '你好'
+    }
+    if (itemCode === 'GESTURE_THANKS') {
+      return '谢谢'
+    }
+    return itemCode
   }
 
   private getCourseNameByCode(courseCode: string): string {

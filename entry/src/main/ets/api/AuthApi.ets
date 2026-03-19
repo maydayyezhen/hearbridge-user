@@ -1,4 +1,5 @@
 import http from '@ohos.net.http'
+import { recordApiDebug, stringifyDebugBody } from './ApiDebug'
 
 export interface ApiEnvelope<T> {
   code: number
@@ -65,7 +66,22 @@ export interface UserInfoStats {
 export interface UserInfoFavorites {
   favoriteCourseCodes: string[]
   favoriteTrainingItemIds: number[]
+  favoriteCourses: UserInfoFavoriteCourse[]
+  favoriteTrainingItems: UserInfoFavoriteTrainingItem[]
   favoriteUpdatedAt: string | null
+}
+
+export interface UserInfoFavoriteCourse {
+  courseCode: string
+  courseName: string
+}
+
+export interface UserInfoFavoriteTrainingItem {
+  itemId: number
+  itemCode: string
+  itemName: string
+  courseCode: string
+  courseName: string
 }
 
 export interface UserInfoRecentCourse {
@@ -108,6 +124,9 @@ export interface UpdatePasswordData {
   success: boolean
 }
 
+export interface LogoutData {
+}
+
 function stringifyResult(result: string | Object | ArrayBuffer): string {
   if (typeof result === 'string') {
     return result
@@ -145,14 +164,19 @@ function parseEnvelope<T>(httpCode: number, rawBody: string): ApiResult<T> {
   }
 }
 
-async function requestApi<T>(url: string, options: http.HttpRequestOptions): Promise<ApiResult<T>> {
+async function requestApi<T>(url: string, options: http.HttpRequestOptions, debugModule: string, debugMethod: string,
+  hasToken: boolean, debugBody: string): Promise<ApiResult<T>> {
   const request = http.createHttp()
 
   try {
     const response = await request.request(url, options)
     const httpCode = Number(response.responseCode)
     const rawBody = stringifyResult(response.result)
+    recordApiDebug(debugModule, debugMethod, url, hasToken, debugBody, rawBody)
     return parseEnvelope<T>(httpCode, rawBody)
+  } catch (error) {
+    recordApiDebug(debugModule, debugMethod, url, hasToken, debugBody, `request error: ${JSON.stringify(error)}`)
+    throw new Error(JSON.stringify(error))
   } finally {
     request.destroy()
   }
@@ -166,7 +190,7 @@ export async function sendSmsCode(baseUrl: string, phone: string): Promise<ApiRe
     usingCache: false,
     connectTimeout: 10000,
     readTimeout: 10000
-  })
+  }, 'AuthApi', 'POST', false, 'none')
 }
 
 export async function smsLogin(baseUrl: string, phone: string, code: string): Promise<ApiResult<SmsLoginData>> {
@@ -184,7 +208,7 @@ export async function smsLogin(baseUrl: string, phone: string, code: string): Pr
       phone,
       code
     }
-  })
+  }, 'AuthApi', 'POST', false, `{"phone":"${phone}","code":"${code}"}`)
 }
 
 export async function passwordRegister(baseUrl: string, payload: PasswordRegisterPayload): Promise<ApiResult<SmsLoginData>> {
@@ -199,7 +223,7 @@ export async function passwordRegister(baseUrl: string, payload: PasswordRegiste
       'Content-Type': 'application/json'
     },
     extraData: payload
-  })
+  }, 'AuthApi', 'POST', false, stringifyDebugBody(payload))
 }
 
 export async function passwordLogin(baseUrl: string, payload: PasswordLoginPayload): Promise<ApiResult<SmsLoginData>> {
@@ -214,7 +238,7 @@ export async function passwordLogin(baseUrl: string, payload: PasswordLoginPaylo
       'Content-Type': 'application/json'
     },
     extraData: payload
-  })
+  }, 'AuthApi', 'POST', false, stringifyDebugBody(payload))
 }
 
 export async function getUserInfo(baseUrl: string, token: string): Promise<ApiResult<AppUserInfoData>> {
@@ -228,7 +252,7 @@ export async function getUserInfo(baseUrl: string, token: string): Promise<ApiRe
     header: {
       token
     }
-  })
+  }, 'AuthApi', 'GET', token.length > 0, 'none')
 }
 
 export async function updateUserProfile(baseUrl: string, token: string, payload: UpdateUserProfilePayload): Promise<ApiResult<UpdateUserProfileData>> {
@@ -244,7 +268,7 @@ export async function updateUserProfile(baseUrl: string, token: string, payload:
       token
     },
     extraData: payload
-  })
+  }, 'AuthApi', 'PUT', token.length > 0, stringifyDebugBody(payload))
 }
 
 export async function updatePassword(baseUrl: string, token: string, payload: UpdatePasswordPayload): Promise<ApiResult<UpdatePasswordData>> {
@@ -260,5 +284,20 @@ export async function updatePassword(baseUrl: string, token: string, payload: Up
       token
     },
     extraData: payload
-  })
+  }, 'AuthApi', 'PUT', token.length > 0, stringifyDebugBody(payload))
+}
+
+export async function logout(baseUrl: string, token: string): Promise<ApiResult<LogoutData>> {
+  const requestUrl = `${normalizeBaseUrl(baseUrl)}/app/auth/logout`
+  return requestApi<LogoutData>(requestUrl, {
+    method: http.RequestMethod.POST,
+    expectDataType: http.HttpDataType.STRING,
+    usingCache: false,
+    connectTimeout: 10000,
+    readTimeout: 10000,
+    header: {
+      'Content-Type': 'application/json',
+      token
+    }
+  }, 'AuthApi', 'POST', token.length > 0, 'none')
 }

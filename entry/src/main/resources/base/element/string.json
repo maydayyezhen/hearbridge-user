@@ -14,11 +14,15 @@
     },
     {
       "name": "permission_camera_reason",
-      "value": "用于训练中的录像练习"
+      "value": "Used for training video capture"
     },
     {
       "name": "permission_microphone_reason",
-      "value": "用于训练中的录音与录像采集"
+      "value": "Used for training audio and video recording"
+    },
+    {
+      "name": "permission_imagevideo_reason",
+      "value": "Used to read photos and videos for upload"
     }
   ]
 }

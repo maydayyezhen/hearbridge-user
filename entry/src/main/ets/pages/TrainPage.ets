@@ -1,6 +1,10 @@
 ﻿import photoAccessHelper from '@ohos.file.photoAccessHelper'
 import picker from '@ohos.file.picker'
-import { FALLBACK_COVER_URL, MediaResourceItem, TrainingItem, getMockTrainingItems } from './train/TrainData'
+import common from '@ohos.app.ability.common'
+import { readToken } from '../api/AuthStorage'
+import { uploadFileToServer } from '../api/FileUploadApi'
+import { completeTrainingSession, getTrainingItemDetail, getTrainingSessionDetail, pauseTrainingSession, startTrainingSession, submitTrainingItem, TrainingSessionItemDto } from '../api/TrainingApi'
+import { MediaResourceItem, TrainingItem, mapSessionItemToTrainingItem, mapTrainingItemDetailToTrainingItem } from './train/TrainData'
 import { ResultStageContent } from './train/stages/ResultStageContent'
 import { IntroStageContent } from './train/stages/IntroStageContent'
 import { GuideStageContent } from './train/stages/GuideStageContent'
@@ -34,17 +38,20 @@ const COURSE_PROGRESS_CACHE: Map<string, CourseProgressSnapshot> = new Map()
 
 @Component
 export struct TrainPage {
+  @Prop apiBaseUrl: string = ''
   @Prop courseName: string = '日常问候入门'
   @Prop courseCode: string = 'COURSE-101'
   @Prop trainingType: string = 'gesture'
   @Prop selectedPhrase: string = '你好'
+  @Prop selectedItemCode: string = ''
   @Prop initialStage: string = 'intro'
   @Prop isCourseFavorited: boolean = false
+  @Prop favoriteTrainingItemCodes: string[] = []
   @State currentItemIndex: number = 0
   @State currentStage: string = 'intro'
   @State practiceMode: string = 'video'
   @State isCapturing: boolean = false
-  @State mockScore: number = 86
+  @State currentScore: number = 0
   @State recordedVideoUri: string = ''
   @State recordedAudioUri: string = ''
   @State audioCaptureTip: string = '已就绪，选一段音频开始跟读吧。'
@@ -63,15 +70,22 @@ export struct TrainPage {
   @State summaryPausedAtName: string = ''
   @State showOutlinePanel: boolean = false
   @State outlinePanelOffsetX: number = 360
-  @State favoriteItemIds: number[] = []
   @State stageContentOpacity: number = 1
   @State stageContentOffsetX: number = 0
   @State isStageAnimating: boolean = false
+  @State resolvedTrainingType: string = ''
+  @State sessionId: number = 0
+  @State sessionFavorite: boolean = false
+  @State trainingTip: string = ''
+  @State isSessionLoading: boolean = false
+  @State isCurrentItemDetailLoading: boolean = false
+  @State trainingItems: TrainingItem[] = []
   onSelectPhrase: (phrase: string) => void = () => {}
   onBackToCourseList: () => void = () => {}
   onCompleteTraining: () => void = () => {}
   onScoringStateChange: (isScoring: boolean) => void = () => {}
   onToggleCourseFavorite: (courseCode: string) => void = (_courseCode: string) => {}
+  onToggleTrainingItemFavorite: (itemCode: string) => void = (_itemCode: string) => {}
 
   private introScroller: Scroller = new Scroller()
   private videoScroller: Scroller = new Scroller()
@@ -86,11 +100,8 @@ export struct TrainPage {
   private stageTransitionTimer: number = -1
   private outlinePanelTimer: number = -1
   private courseScoreEntries: CourseScoreEntry[] = []
-  private readonly fallbackCoverUrl: string = FALLBACK_COVER_URL
-  private readonly trainingItems: TrainingItem[] = getMockTrainingItems()
-
   aboutToAppear() {
-    this.syncCurrentItemFromSelection()
+    this.initializeTrainingSession()
   }
 
   aboutToDisappear() {
@@ -101,7 +112,159 @@ export struct TrainPage {
     this.setScoringState(false)
   }
 
-  private syncCurrentItemFromSelection() {
+  private getAbilityContext(): common.BaseContext {
+    return this.getUIContext().getHostContext() as common.BaseContext
+  }
+
+  private async initializeTrainingSession() {
+    this.isSessionLoading = true
+    this.resolvedTrainingType = this.normalizeTrainingType(this.trainingType)
+    this.trainingTip = '正在同步训练进度...'
+    try {
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.trainingItems = []
+        this.trainingTip = '登录已失效，请重新登录。'
+        return
+      }
+
+      const startResult = await startTrainingSession(this.apiBaseUrl, token, this.courseCode)
+      if (!startResult.ok || !startResult.data) {
+        this.trainingItems = []
+        this.trainingTip = startResult.message.length > 0 ? startResult.message : `训练会话启动失败（错误码 ${startResult.code}）`
+        return
+      }
+
+      this.sessionId = startResult.data.sessionId
+      const preferredItemCode = this.selectedItemCode.trim().length > 0 ? this.selectedItemCode : startResult.data.currentItemCode
+      const preferredItemStatus = preferredItemCode === startResult.data.currentItemCode ? startResult.data.currentItemStatus : ''
+      await this.refreshTrainingSessionDetail(token, preferredItemCode, preferredItemStatus)
+      this.trainingTip = ''
+    } catch (_error) {
+      this.trainingItems = []
+      this.trainingTip = '网络异常，无法获取训练会话。'
+    } finally {
+      this.isSessionLoading = false
+    }
+  }
+
+  private async refreshTrainingSessionDetail(token: string, preferredItemCode: string = '', preferredItemStatus: string = '') {
+    const detailResult = await getTrainingSessionDetail(this.apiBaseUrl, token, this.sessionId)
+    if (!detailResult.ok || !detailResult.data) {
+      this.trainingItems = []
+      this.trainingTip = detailResult.message.length > 0 ? detailResult.message : `训练详情加载失败（错误码 ${detailResult.code}）`
+      return
+    }
+
+    this.resolvedTrainingType = this.normalizeTrainingType(detailResult.data.trainingType)
+    this.sessionFavorite = detailResult.data.favorite
+    this.trainingItems = this.mapTrainingItems(detailResult.data.trainingType, detailResult.data.items)
+    this.hydrateCourseScores(detailResult.data.items)
+    await this.syncCurrentItemFromSelection(preferredItemCode, preferredItemStatus)
+  }
+
+  private normalizeTrainingType(value: string): string {
+    if (value === 'voice' || value === 'speech') {
+      return 'speech'
+    }
+    return 'gesture'
+  }
+
+  private isSpeechTraining(): boolean {
+    return this.resolvedTrainingType === 'speech'
+  }
+
+  private mapTrainingItems(trainingType: string, items: TrainingSessionItemDto[]): TrainingItem[] {
+    const mapped: TrainingItem[] = []
+    for (let i = 0; i < items.length; i += 1) {
+      mapped.push(mapSessionItemToTrainingItem(items[i], trainingType, i))
+    }
+    mapped.sort((left: TrainingItem, right: TrainingItem) => left.sortNum - right.sortNum)
+    return mapped
+  }
+
+  private async loadItemDetailAtIndex(index: number) {
+    const items: TrainingItem[] = this.getVisibleItems()
+    if (index < 0 || index >= items.length || this.sessionId <= 0) {
+      return
+    }
+    const currentItem = items[index]
+    if (currentItem.description.length > 0 || currentItem.goal.length > 0 || currentItem.cover.length > 0 || currentItem.video.length > 0) {
+      if (currentItem.status === 'completed' && this.getCurrentItemScore() <= 0) {
+        this.currentScore = this.getStoredScoreByItemId(currentItem.id)
+      }
+      return
+    }
+
+    this.isCurrentItemDetailLoading = true
+    try {
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.trainingTip = '登录已失效，请重新登录。'
+        return
+      }
+      const detailResult = await getTrainingItemDetail(this.apiBaseUrl, token, this.sessionId, currentItem.code)
+      if (!detailResult.ok || !detailResult.data) {
+        this.trainingTip = detailResult.message.length > 0 ? detailResult.message : '训练项详情加载失败。'
+        return
+      }
+
+      const updated: TrainingItem[] = []
+      for (let i = 0; i < this.trainingItems.length; i += 1) {
+        if (this.trainingItems[i].code === currentItem.code) {
+          updated.push(mapTrainingItemDetailToTrainingItem(detailResult.data, this.resolvedTrainingType, i))
+        } else {
+          updated.push(this.trainingItems[i])
+        }
+      }
+      this.trainingItems = updated
+      if (detailResult.data.score !== null) {
+        this.upsertCourseScoreByItemCode(currentItem.code, Math.round(Number(detailResult.data.score)))
+        if (this.currentItemIndex === index) {
+          this.currentScore = Math.round(Number(detailResult.data.score))
+        }
+      }
+    } catch (_error) {
+      this.trainingTip = '训练项详情加载失败，请检查网络后重试。'
+    } finally {
+      this.isCurrentItemDetailLoading = false
+    }
+  }
+
+  private getStoredScoreByItemId(itemId: number): number {
+    for (let i = 0; i < this.courseScoreEntries.length; i += 1) {
+      if (this.courseScoreEntries[i].itemId === itemId) {
+        return this.courseScoreEntries[i].score
+      }
+    }
+    return 0
+  }
+
+  private upsertCourseScoreByItemCode(itemCode: string, score: number) {
+    for (let i = 0; i < this.trainingItems.length; i += 1) {
+      if (this.trainingItems[i].code === itemCode) {
+        let found = false
+        for (let j = 0; j < this.courseScoreEntries.length; j += 1) {
+          if (this.courseScoreEntries[j].itemId === this.trainingItems[i].id) {
+            this.courseScoreEntries[j].score = score
+            found = true
+            break
+          }
+        }
+        if (!found) {
+          this.courseScoreEntries.push(new CourseScoreEntry(this.trainingItems[i].id, score))
+        }
+        this.refreshSummaryStats()
+        return
+      }
+    }
+  }
+
+  private hydrateCourseScores(items: TrainingSessionItemDto[]) {
+    this.resetCourseSummary()
+  }
+
+  private async syncCurrentItemFromSelection(preferredItemCode: string = '', preferredItemStatus: string = '') {
     const items: TrainingItem[] = this.getVisibleItems()
     if (items.length === 0) {
       this.resetCourseSummary()
@@ -117,41 +280,34 @@ export struct TrainPage {
       }
     }
 
-    const restored = this.tryRestoreCourseProgress(items)
-    if (!restored) {
-      this.applyMockCompletedProgress(items)
+    if (preferredItemCode.length > 0) {
+      for (let index = 0; index < items.length; index += 1) {
+        if (items[index].code === preferredItemCode) {
+          selectedIndex = index
+          break
+        }
+      }
     }
 
     if (selectedIndex >= 0) {
       this.currentItemIndex = selectedIndex
       this.onSelectPhrase(items[this.currentItemIndex].name)
-    } else if (!restored) {
+    } else {
       this.currentItemIndex = 0
+      this.onSelectPhrase(items[this.currentItemIndex].name)
     }
 
     this.resetTrainingFlow()
-    this.applyInitialStage()
+    await this.loadItemDetailAtIndex(this.currentItemIndex)
+    this.applyInitialStage(preferredItemStatus)
   }
 
-  private applyInitialStage() {
-    if (this.initialStage === 'result') {
+  private applyInitialStage(preferredItemStatus: string = '') {
+    if (this.initialStage === 'result' || preferredItemStatus === 'completed' || this.getCurrentItemScore() > 0) {
       this.currentStage = 'result'
       return
     }
     this.currentStage = 'intro'
-  }
-
-  private applyMockCompletedProgress(items: TrainingItem[]) {
-    this.resetCourseSummary()
-    if (this.courseCode !== 'COURSE-301') {
-      return
-    }
-    const presetCount = Math.min(3, items.length)
-    for (let i = 0; i < presetCount; i += 1) {
-      const score = 84 + (i * 3)
-      this.courseScoreEntries.push(new CourseScoreEntry(items[i].id, score))
-    }
-    this.refreshSummaryStats()
   }
 
   private resetCourseSummary() {
@@ -169,17 +325,17 @@ export struct TrainPage {
       this.stageContentOffsetX = 0
     }
     this.currentStage = 'intro'
-    this.practiceMode = this.trainingType === 'speech' ? 'audio' : 'video'
+    this.practiceMode = this.isSpeechTraining() ? 'audio' : 'video'
     this.isCapturing = false
     this.setScoringState(false)
     this.clearScoringTimer()
-    this.mockScore = 86
+    this.currentScore = this.getCurrentItemScore()
     this.recordedVideoUri = ''
     this.recordedAudioUri = ''
     this.summaryMode = 'completed'
     this.summaryPausedAtName = ''
     this.stopDemoAudioPlayback()
-    if (this.trainingType === 'speech') {
+    if (this.isSpeechTraining()) {
       this.audioCaptureTip = '已就绪，选一段音频开始跟读吧。'
       this.captureTip = '已就绪，选一段视频开始练习吧。'
     } else {
@@ -189,7 +345,7 @@ export struct TrainPage {
   }
 
   private getCourseProgressKey(): string {
-    return `${this.courseCode}|${this.trainingType}`
+    return `${this.courseCode}|${this.resolvedTrainingType}`
   }
 
   private tryRestoreCourseProgress(items: TrainingItem[]): boolean {
@@ -278,6 +434,29 @@ export struct TrainPage {
     }
     this.summaryAverageScore = Math.floor(total / count)
     this.summaryBestScore = best
+  }
+
+  private getCurrentItemScore(): number {
+    const current = this.getCurrentItem()
+    if (current.id <= 0) {
+      return 0
+    }
+    for (let i = 0; i < this.courseScoreEntries.length; i += 1) {
+      if (this.courseScoreEntries[i].itemId === current.id) {
+        return this.courseScoreEntries[i].score
+      }
+    }
+    return 0
+  }
+
+  private getHighestScore(): number {
+    let best = 0
+    for (let i = 0; i < this.courseScoreEntries.length; i += 1) {
+      if (this.courseScoreEntries[i].score > best) {
+        best = this.courseScoreEntries[i].score
+      }
+    }
+    return best
   }
 
   private clearDemoAudioTimer() {
@@ -419,25 +598,13 @@ export struct TrainPage {
     const items: TrainingItem[] = []
     for (let index = 0; index < this.trainingItems.length; index += 1) {
       const item = this.trainingItems[index]
-      if (this.isItemMatchedToCourse(item) && (item.status === 'published' || item.status === 'enabled')) {
+      if (item.status === 'published' || item.status === 'enabled' || item.status === 'completed' || item.status === 'in_progress' ||
+        item.status === 'not_started' || item.status === 'skipped') {
         items.push(item)
       }
     }
     items.sort((left: TrainingItem, right: TrainingItem) => left.sortNum - right.sortNum)
     return items
-  }
-
-  private isItemMatchedToCourse(item: TrainingItem): boolean {
-    if (this.courseCode === 'COURSE-301') {
-      return item.majorCategoryCode === 'voice' && item.code.startsWith('VOI_')
-    }
-    if (this.courseCode === 'COURSE-302') {
-      return item.id === 3
-    }
-    if (this.courseCode === 'COURSE-101') {
-      return item.id === 1
-    }
-    return item.majorCategoryCode === (this.trainingType === 'speech' ? 'voice' : 'gesture')
   }
 
   private hasVisibleItems(): boolean {
@@ -452,11 +619,16 @@ export struct TrainPage {
     return items[Math.min(items.length - 1, Math.max(0, this.currentItemIndex))]
   }
 
+  private hasLoadedItemDetail(item: TrainingItem): boolean {
+    return item.meaning.length > 0 || item.description.length > 0 || item.goal.length > 0 || item.cover.length > 0 ||
+      item.video.length > 0 || item.audio.length > 0 || item.actionImages.length > 0
+  }
+
   private getPrimaryCoverUrl(item: TrainingItem): string {
     if (item.cover.length > 0) {
       return item.cover[0].url
     }
-    return this.fallbackCoverUrl
+    return ''
   }
 
   private getVideoPosterUrl(item: TrainingItem): string {
@@ -516,7 +688,7 @@ export struct TrainPage {
     return `${Math.min(this.currentItemIndex + 1, totalCount)}/${totalCount}`
   }
 
-  private selectItem(index: number) {
+  private async selectItem(index: number) {
     const items: TrainingItem[] = this.getVisibleItems()
     if (items.length === 0) {
       return
@@ -524,9 +696,10 @@ export struct TrainPage {
     this.currentItemIndex = Math.min(items.length - 1, Math.max(0, index))
     this.onSelectPhrase(items[this.currentItemIndex].name)
     this.resetTrainingFlow()
+    await this.loadItemDetailAtIndex(this.currentItemIndex)
   }
 
-  private switchItemWithAnimation(targetIndex: number, forward: boolean, targetStage: string = 'intro') {
+  private async switchItemWithAnimation(targetIndex: number, forward: boolean, targetStage: string = 'intro') {
     const items: TrainingItem[] = this.getVisibleItems()
     if (items.length === 0 || this.isStageAnimating) {
       return
@@ -540,6 +713,7 @@ export struct TrainPage {
     this.currentItemIndex = nextIndex
     this.onSelectPhrase(items[this.currentItemIndex].name)
     this.resetTrainingFlow(false)
+    await this.loadItemDetailAtIndex(this.currentItemIndex)
     this.currentStage = targetStage
     this.stageContentOpacity = 0
     this.stageContentOffsetX = forward ? 20 : -20
@@ -639,20 +813,105 @@ export struct TrainPage {
     return this.introScroller
   }
 
-  private submitPractice() {
+  private extractFileName(fileUri: string): string {
+    const slashIndex = fileUri.lastIndexOf('/')
+    if (slashIndex >= 0 && slashIndex < fileUri.length - 1) {
+      return fileUri.substring(slashIndex + 1)
+    }
+    return `training_${Date.now()}`
+  }
+
+  private getMimeTypeForCurrentPractice(fileName: string): string {
+    const lower = fileName.toLowerCase()
+    if (this.isSpeechTraining() && this.practiceMode === 'audio') {
+      if (lower.endsWith('.wav')) {
+        return 'audio/wav'
+      }
+      if (lower.endsWith('.aac')) {
+        return 'audio/aac'
+      }
+      if (lower.endsWith('.ogg')) {
+        return 'audio/ogg'
+      }
+      return 'audio/mpeg'
+    }
+    if (lower.endsWith('.mov')) {
+      return 'video/quicktime'
+    }
+    return 'video/mp4'
+  }
+
+  private async submitPractice() {
     if (this.isScoring || this.isStageAnimating) {
       return
     }
+    this.trainingTip = ''
+    const item = this.getCurrentItem()
+    if (item.id <= 0 || this.sessionId <= 0) {
+      this.trainingTip = '当前训练会话还没准备好，请稍后重试。'
+      return
+    }
+    const localUri = this.isSpeechTraining() && this.practiceMode === 'audio' ? this.recordedAudioUri : this.recordedVideoUri
+    if (localUri.length === 0) {
+      if (this.isSpeechTraining() && this.practiceMode === 'audio') {
+        this.audioCaptureTip = '请先选择一段本地音频，再进行评分。'
+      } else {
+        this.captureTip = '请先选择一段本地视频，再进行评分。'
+      }
+      return
+    }
+
     this.isCapturing = false
+    this.trainingTip = '正在上传练习文件...'
     this.setScoringState(true)
-    this.clearScoringTimer()
-    this.scoringTimer = setTimeout(() => {
-      this.mockScore = this.trainingType === 'speech' ? 91 : 88
-      this.recordCurrentItemScore(this.mockScore)
+    try {
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.trainingTip = '登录已失效，请重新登录。'
+        return
+      }
+
+      const fileName = this.extractFileName(localUri)
+      const mimeType = this.getMimeTypeForCurrentPractice(fileName)
+      const uploadResult = await uploadFileToServer(this.getAbilityContext() as common.UIAbilityContext,
+        this.apiBaseUrl, token, localUri, fileName, mimeType)
+      if (!uploadResult.ok || !uploadResult.data) {
+        this.trainingTip = uploadResult.message.length > 0 ? uploadResult.message : '练习文件上传失败。'
+        return
+      }
+
+      this.trainingTip = '正在生成评分结果...'
+      const submitResult = await submitTrainingItem(this.apiBaseUrl, token, this.sessionId, item.code, {
+        submitType: this.isSpeechTraining() && this.practiceMode === 'audio' ? 'audio' : 'video',
+        fileUrl: uploadResult.data,
+        fileName,
+        mimeType
+      })
+      if (!submitResult.ok || !submitResult.data) {
+        this.trainingTip = submitResult.message.length > 0 ? submitResult.message : '训练评分失败。'
+        return
+      }
+
+      this.currentScore = Math.round(Number(submitResult.data.score))
+      this.recordCurrentItemScore(this.currentScore)
+      await this.refreshTrainingSessionDetail(token, submitResult.data.itemCode, submitResult.data.itemStatus)
+      if (submitResult.data.courseCompleted) {
+        const completeResult = await completeTrainingSession(this.apiBaseUrl, token, this.sessionId)
+        if (completeResult.ok && completeResult.data) {
+          this.summaryMode = 'completed'
+          this.summaryCompletedCount = completeResult.data.completedItemCount
+          this.summaryAverageScore = completeResult.data.totalScore === null ? this.summaryAverageScore : Math.round(Number(completeResult.data.totalScore))
+          this.summaryBestScore = this.getHighestScore()
+        }
+      }
       this.setScoringState(false)
+      this.trainingTip = ''
       this.transitionToStage('result', true)
-      this.scoringTimer = -1
-    }, 1800)
+    } catch (_error) {
+      this.trainingTip = '提交练习失败，请检查网络后重试。'
+    } finally {
+      this.setScoringState(false)
+    }
   }
 
   private async openLocalVideoPicker() {
@@ -664,14 +923,14 @@ export struct TrainPage {
     this.captureTip = '正在打开视频选择...'
 
     try {
-      let videoPicker = new photoAccessHelper.PhotoViewPicker()
-      let pickerOptions = new photoAccessHelper.PhotoSelectOptions()
-      pickerOptions.MIMEType = photoAccessHelper.PhotoViewMIMETypes.VIDEO_TYPE
-      pickerOptions.maxSelectNumber = 1
+      let documentPicker = new picker.DocumentViewPicker()
+      let documentSelectOptions = new picker.DocumentSelectOptions()
+      documentSelectOptions.maxSelectNumber = 1
+      documentSelectOptions.fileSuffixFilters = ['视频|.mp4,.mov,.m4v,.3gp,.mkv,.webm']
 
-      const pickerResult = await videoPicker.select(pickerOptions)
-      if (pickerResult.photoUris.length > 0) {
-        this.recordedVideoUri = pickerResult.photoUris[0]
+      const documentSelectResult = await documentPicker.select(documentSelectOptions) as Array<string>
+      if (documentSelectResult.length > 0) {
+        this.recordedVideoUri = documentSelectResult[0]
         this.captureTip = '视频已就位，预览后继续闯关。'
       } else {
         this.captureTip = '还没选到视频，再挑一段试试。'
@@ -727,20 +986,34 @@ export struct TrainPage {
   }
 
   private finishCourseAndExit() {
-    if (this.summaryMode === 'completed') {
-      this.clearCourseProgress()
-    } else {
-      this.saveCourseProgress(this.summaryPausedAtName)
-    }
     this.onBackToCourseList()
   }
 
-  private handlePauseConfirm() {
+  private async handlePauseConfirm() {
     const item = this.getCurrentItem()
-    this.summaryMode = 'paused'
-    this.summaryPausedAtName = item.name
-    this.saveCourseProgress(item.name)
-    this.transitionToStage('summary', true)
+    if (this.sessionId <= 0) {
+      this.summaryMode = 'paused'
+      this.summaryPausedAtName = item.name
+      this.transitionToStage('summary', true)
+      return
+    }
+    try {
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.trainingTip = '登录已失效，请重新登录。'
+        return
+      }
+      const pauseResult = await pauseTrainingSession(this.apiBaseUrl, token, this.sessionId)
+      if (!pauseResult.ok || !pauseResult.data) {
+        this.trainingTip = pauseResult.message.length > 0 ? pauseResult.message : '暂停训练失败。'
+        return
+      }
+      this.summaryMode = 'paused'
+      this.summaryPausedAtName = item.name
+      this.transitionToStage('summary', true)
+    } catch (_error) {
+      this.trainingTip = '暂停训练失败，请稍后重试。'
+    }
   }
 
   private handleHeaderBackAction() {
@@ -808,12 +1081,12 @@ export struct TrainPage {
   }
 
   private isCurrentItemFavorited(): boolean {
-    const currentId = this.getCurrentItem().id
-    if (currentId <= 0) {
+    const currentCode = this.getCurrentItem().code
+    if (currentCode.length === 0) {
       return false
     }
-    for (let i = 0; i < this.favoriteItemIds.length; i += 1) {
-      if (this.favoriteItemIds[i] === currentId) {
+    for (let i = 0; i < this.favoriteTrainingItemCodes.length; i += 1) {
+      if (this.favoriteTrainingItemCodes[i] === currentCode) {
         return true
       }
     }
@@ -821,23 +1094,11 @@ export struct TrainPage {
   }
 
   private toggleCurrentItemFavorite() {
-    const currentId = this.getCurrentItem().id
-    if (currentId <= 0) {
+    const currentCode = this.getCurrentItem().code
+    if (currentCode.length === 0) {
       return
     }
-    const updated: number[] = []
-    let found = false
-    for (let i = 0; i < this.favoriteItemIds.length; i += 1) {
-      if (this.favoriteItemIds[i] === currentId) {
-        found = true
-        continue
-      }
-      updated.push(this.favoriteItemIds[i])
-    }
-    if (!found) {
-      updated.push(currentId)
-    }
-    this.favoriteItemIds = updated
+    this.onToggleTrainingItemFavorite(currentCode)
   }
 
   private isItemCompleted(itemId: number): boolean {
@@ -851,8 +1112,11 @@ export struct TrainPage {
 
   private getCompletedItemIds(): number[] {
     const result: number[] = []
-    for (let i = 0; i < this.courseScoreEntries.length; i += 1) {
-      result.push(this.courseScoreEntries[i].itemId)
+    const items: TrainingItem[] = this.getVisibleItems()
+    for (let i = 0; i < items.length; i += 1) {
+      if (items[i].status === 'completed') {
+        result.push(items[i].id)
+      }
     }
     return result
   }
@@ -891,7 +1155,7 @@ export struct TrainPage {
     this.openOutlinePanel()
   }
 
-  private handleOutlineItemClick(itemId: number, completed: boolean) {
+  private async handleOutlineItemClick(itemId: number, completed: boolean) {
     const items: TrainingItem[] = this.getVisibleItems()
     let targetIndex = -1
     for (let i = 0; i < items.length; i += 1) {
@@ -905,7 +1169,7 @@ export struct TrainPage {
       return
     }
 
-    this.selectItem(targetIndex)
+    await this.selectItem(targetIndex)
     if (completed) {
       this.currentStage = 'result'
     } else {
@@ -925,7 +1189,11 @@ export struct TrainPage {
               Blank()
                 .height(106)
               if (this.hasVisibleItems()) {
-                this.buildIntroStage(this.getCurrentItem())
+                if (this.isCurrentItemDetailLoading && !this.hasLoadedItemDetail(this.getCurrentItem())) {
+                  this.buildItemDetailLoadingState()
+                } else {
+                  this.buildIntroStage(this.getCurrentItem())
+                }
               } else {
                 this.buildEmptyState()
               }
@@ -1000,7 +1268,7 @@ export struct TrainPage {
               Blank()
                 .height(74)
               SummaryStageContent({
-                trainingType: this.trainingType,
+                trainingType: this.resolvedTrainingType,
                 completedCount: this.summaryCompletedCount,
                 totalCount: this.getVisibleItems().length,
                 averageScore: this.summaryAverageScore,
@@ -1127,10 +1395,12 @@ export struct TrainPage {
   @Builder
   private buildPreloadAssets(item: TrainingItem) {
     Column({ space: 2 }) {
-      Image(this.getPrimaryCoverUrl(item))
-        .width(1)
-        .height(1)
-        .opacity(0.01)
+      if (this.getPrimaryCoverUrl(item).length > 0) {
+        Image(this.getPrimaryCoverUrl(item))
+          .width(1)
+          .height(1)
+          .opacity(0.01)
+      }
 
       if (item.videoPoster.length > 0) {
         Image(this.getVideoPosterUrl(item))
@@ -1168,12 +1438,12 @@ export struct TrainPage {
           .height(34)
           .color('#2E79F4')
 
-        Text(this.trainingType === 'speech' ? 'AI 正在评估发音...' : 'AI 正在评估动作...')
+        Text(this.isSpeechTraining() ? 'AI 正在评估发音...' : 'AI 正在评估动作...')
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
           .fontColor('#1F2A44')
 
-        Text(this.trainingType === 'speech'
+        Text(this.isSpeechTraining()
           ? '正在分析发音清晰度、节奏稳定性和口型表现'
           : '正在分析动作完整度、连贯性和关键姿态准确度')
           .fontSize(12)
@@ -1378,7 +1648,7 @@ export struct TrainPage {
   @Builder
   private buildPracticeStage(item: TrainingItem) {
     Column({ space: 16 }) {
-      if (this.trainingType === 'speech') {
+      if (this.isSpeechTraining()) {
         Row({ space: 10 }) {
           this.buildPracticeModeCard('audio', '录音练习', '音')
           this.buildPracticeModeCard('video', '录像练习', '视')
@@ -1388,7 +1658,7 @@ export struct TrainPage {
 
       Column({ space: 14 }) {
         Row({ space: 8 }) {
-          Text(this.trainingType === 'speech'
+          Text(this.isSpeechTraining()
             ? (this.practiceMode === 'audio' ? '音频跟读' : '视频跟练')
             : '手势跟练')
             .fontSize(11)
@@ -1397,7 +1667,7 @@ export struct TrainPage {
             .backgroundColor('#EEF5FF')
             .borderRadius(12)
 
-          Text(this.trainingType === 'speech'
+          Text(this.isSpeechTraining()
             ? (this.practiceMode === 'audio' ? '发音节奏' : '口型动作')
             : '动作评估')
             .fontSize(11)
@@ -1405,7 +1675,7 @@ export struct TrainPage {
         }
         .width('100%')
 
-        if (this.trainingType === 'speech' && this.practiceMode === 'audio' && item.audio.length > 0) {
+        if (this.isSpeechTraining() && this.practiceMode === 'audio' && item.audio.length > 0) {
           Text('先听示范，模仿更准')
             .width('100%')
             .fontSize(18)
@@ -1525,7 +1795,7 @@ export struct TrainPage {
           .border({ width: 1, color: '#E6EDF8' })
         }
 
-        Text(this.trainingType === 'speech'
+        Text(this.isSpeechTraining()
           ? (this.practiceMode === 'audio' ? '上传你的跟读音频' : '上传你的口语练习视频')
           : '上传你的手势练习视频')
           .width('100%')
@@ -1533,7 +1803,7 @@ export struct TrainPage {
           .fontWeight(FontWeight.Medium)
           .fontColor('#1F2A44')
 
-        Text(this.trainingType === 'speech'
+        Text(this.isSpeechTraining()
           ? (this.practiceMode === 'audio'
             ? (item.audio.length > 0 ? '先听示范，再录一遍，你会更容易拿到高分。' : '没有示范也没关系，直接上传你的练习音频即可。')
             : '建议横屏拍摄，口型清晰、语速稳定，评分会更准确。')
@@ -1543,7 +1813,7 @@ export struct TrainPage {
           .fontColor('#7A8CA7')
           .lineHeight(20)
 
-        if (this.trainingType === 'speech' && this.practiceMode === 'audio') {
+        if (this.isSpeechTraining() && this.practiceMode === 'audio') {
           Column({ space: 12 }) {
             Column({ space: 10 }) {
               Button('选择本地音频')
@@ -1588,12 +1858,12 @@ export struct TrainPage {
             .borderRadius(20)
 
             Column({ space: 14 }) {
-              Text(this.trainingType === 'speech' ? '选好视频后，就能进入评分' : '选好手势视频后，就能进入评分')
+              Text(this.isSpeechTraining() ? '选好视频后，就能进入评分' : '选好手势视频后，就能进入评分')
                 .fontSize(20)
                 .fontWeight(FontWeight.Medium)
                 .fontColor('#FFFFFF')
 
-              Button(this.trainingType === 'speech' ? '选择本地视频' : '选择手势视频')
+              Button(this.isSpeechTraining() ? '选择本地视频' : '选择手势视频')
                 .width(160)
                 .height(46)
                 .fontSize(15)
@@ -1610,13 +1880,24 @@ export struct TrainPage {
           .height(220)
         }
 
-        Text(this.trainingType === 'speech' && this.practiceMode === 'audio' ? this.audioCaptureTip : this.captureTip)
+        Text(this.isSpeechTraining() && this.practiceMode === 'audio' ? this.audioCaptureTip : this.captureTip)
           .width('100%')
           .fontSize(12)
           .fontColor('#7A8CA7')
           .lineHeight(18)
 
-        if ((this.trainingType !== 'speech' || this.practiceMode === 'video') && this.recordedVideoUri.length > 0) {
+        if (this.trainingTip.length > 0) {
+          Text(this.trainingTip)
+            .width('100%')
+            .fontSize(12)
+            .lineHeight(18)
+            .fontColor(this.isScoring ? '#2E79F4' : '#E5484D')
+            .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+            .backgroundColor(this.isScoring ? '#EEF5FF' : '#FFF1F1')
+            .borderRadius(12)
+        }
+
+        if ((!this.isSpeechTraining() || this.practiceMode === 'video') && this.recordedVideoUri.length > 0) {
           Video({
             src: this.recordedVideoUri,
             controller: this.practiceVideoController
@@ -1688,17 +1969,18 @@ export struct TrainPage {
   private buildResultStage(item: TrainingItem) {
     ResultStageContent({
       itemName: item.name,
-      score: this.mockScore
+      score: this.currentScore
     })
   }
 
   @Builder
   private buildEmptyState() {
     Column({ space: 12 }) {
-      Text('当前课程还没有训练项')
+      Text(this.isSessionLoading ? '正在加载训练内容...' : (this.trainingTip.length > 0 ? this.trainingTip : '当前课程还没有训练项'))
         .fontSize(18)
         .fontWeight(FontWeight.Medium)
-        .fontColor('#1F2A44')
+        .fontColor(this.isSessionLoading ? '#5F7593' : (this.trainingTip.length > 0 ? '#E5484D' : '#1F2A44'))
+        .textAlign(TextAlign.Center)
 
       Button('返回课程列表')
         .width('100%')
@@ -1711,6 +1993,29 @@ export struct TrainPage {
         .onClick(() => {
           this.onBackToCourseList()
         })
+    }
+    .width('100%')
+    .padding(24)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(18)
+  }
+
+  @Builder
+  private buildItemDetailLoadingState() {
+    Column({ space: 12 }) {
+      LoadingProgress()
+        .width(26)
+        .height(26)
+        .color('#2E79F4')
+
+      Text('正在加载训练项内容...')
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#1F2A44')
+
+      Text('封面、说明和步骤内容马上就好')
+        .fontSize(12)
+        .fontColor('#7A8CA7')
     }
     .width('100%')
     .padding(24)
