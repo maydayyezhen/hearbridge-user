@@ -110,21 +110,65 @@ export interface SubmitTrainingItemPayload {
   mimeType?: string
   fileSize?: number
   fileDuration?: number
+  recognizedText?: string
+  partialText?: string
+  submitResult?: string
+  viewedDemo?: boolean
+  finished?: boolean
+  retried?: boolean
+  firstSuccess?: boolean
+}
+
+export interface TrainingResultDimensionDto {
+  key: string
+  label: string
+  score: number
+}
+
+export interface TrainingResultTagModuleDto {
+  title: string
+  tags: string[]
+  description: string
+}
+
+export interface TrainingResultTrendDto {
+  title: string
+  scores: number[]
+  description: string
+}
+
+export interface TrainingResultDetailDto {
+  title: string
+  scoreLabel: string
+  badges: string[]
+  dimensions: TrainingResultDimensionDto[]
+  strengths: TrainingResultTagModuleDto | null
+  improvements: TrainingResultTagModuleDto | null
+  recentTrend: TrainingResultTrendDto | null
 }
 
 export interface SubmitTrainingItemData {
   sessionId: number
+  courseCode: string
+  courseName: string
+  trainingType: string
   itemCode: string
+  itemName: string
+  itemOrder: number
   itemStatus: string
   evaluationStatus: string
   score: number
   feedback: string
   nextItemCode: string | null
+  nextItemName: string | null
   nextItemStatus: string | null
   progressPercent: number
   completedItemCount: number
   totalItemCount: number
   courseCompleted: boolean
+  submittedAt: string | null
+  completedAt: string | null
+  resultDetail: TrainingResultDetailDto | null
 }
 
 export interface PauseTrainingSessionData {
@@ -152,6 +196,7 @@ export interface RecentTrainingCourseItemDto {
   trainingType: string
   sessionId: number
   currentItemCode: string | null
+  currentItemName: string | null
   progressPercent: number
   completedItemCount: number
   totalItemCount: number
@@ -161,6 +206,9 @@ export interface RecentTrainingCourseItemDto {
 
 export interface RecentTrainingCourseData {
   list: RecentTrainingCourseItemDto[]
+  pageNo: number
+  pageSize: number
+  total: number
 }
 
 interface TokenHeader {
@@ -286,8 +334,8 @@ export async function submitTrainingItem(baseUrl: string, token: string, session
     method: http.RequestMethod.POST,
     expectDataType: http.HttpDataType.STRING,
     usingCache: false,
-    connectTimeout: 10000,
-    readTimeout: 10000,
+    connectTimeout: 100000,
+    readTimeout: 100000,
     header: buildTokenHeader(token, true),
     extraData: requestBody
   }, 'POST', token.length > 0, requestBody)
@@ -317,8 +365,9 @@ export async function completeTrainingSession(baseUrl: string, token: string, se
   }, 'POST', token.length > 0, 'none')
 }
 
-export async function getRecentTrainingCourses(baseUrl: string, token: string, limit: number = 10): Promise<ApiResult<RecentTrainingCourseData>> {
-  const requestUrl = `${normalizeBaseUrl(baseUrl)}/app/training/recent-course?limit=${limit}`
+export async function getRecentTrainingCourses(baseUrl: string, token: string, pageNo: number = 1,
+  pageSize: number = 10): Promise<ApiResult<RecentTrainingCourseData>> {
+  const requestUrl = `${normalizeBaseUrl(baseUrl)}/app/training/recent-course?pageNo=${pageNo}&pageSize=${pageSize}`
   return requestApi<RecentTrainingCourseData>(requestUrl, {
     method: http.RequestMethod.GET,
     expectDataType: http.HttpDataType.STRING,
@@ -326,5 +375,5 @@ export async function getRecentTrainingCourses(baseUrl: string, token: string, l
     connectTimeout: 10000,
     readTimeout: 10000,
     header: buildTokenHeader(token)
-  }, 'GET', token.length > 0, `{"limit":${limit}}`)
+  }, 'GET', token.length > 0, `{"pageNo":${pageNo},"pageSize":${pageSize}}`)
 }

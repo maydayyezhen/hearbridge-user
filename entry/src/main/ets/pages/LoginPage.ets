@@ -33,211 +33,358 @@ export struct LoginPage {
   onSkipLogin: () => void = () => {}
 
   build() {
-    Column() {
-      Column({ space: 20 }) {
-        Column({ space: 8 }) {
-          Text('HearBridge')
-            .fontSize(32)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#1F5FE0')
-
-          Text(this.authScene === 'register'
-            ? '\u521b\u5efa\u8d26\u53f7'
-            : (this.loginMode === 'password' ? '\u8d26\u53f7\u5bc6\u7801\u767b\u5f55' : '\u9a8c\u8bc1\u7801\u767b\u5f55'))
-            .fontSize(15)
-            .fontColor('#607089')
-        }
+    Stack() {
+      Row()
         .width('100%')
-        .alignItems(HorizontalAlign.Start)
+        .height('100%')
+        .linearGradient({
+          angle: 180,
+          colors: [
+            ['#F8FBFF', 0],
+            ['#F2F7FF', 0.42],
+            ['#FFFFFF', 1]
+          ]
+        })
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
 
-        Row({ space: 8 }) {
-          this.buildSceneTab('login', '\u767b\u5f55')
-          this.buildSceneTab('register', '\u6ce8\u518c')
-        }
-        .width('100%')
-
-        if (this.authScene === 'register') {
-          Column({ space: 12 }) {
-            this.buildInput('\u6ce8\u518c\u8d26\u53f7', '\u8bf7\u8f93\u5165\u8d26\u53f7', this.registerAccount, this.onRegisterAccountChange)
-            this.buildPasswordInput('\u8bbe\u7f6e\u5bc6\u7801', '\u81f3\u5c11 6 \u4f4d', this.registerPassword, this.onRegisterPasswordChange)
-            this.buildPasswordInput('\u786e\u8ba4\u5bc6\u7801', '\u518d\u6b21\u8f93\u5165\u5bc6\u7801', this.registerConfirmPassword, this.onRegisterConfirmPasswordChange)
-            this.buildInput('\u624b\u673a\u53f7\uff08\u53ef\u9009\uff09', '\u7528\u4e8e\u540e\u7eed\u627e\u56de\u5bc6\u7801', this.registerPhone, this.onRegisterPhoneChange)
-          }
-          .width('100%')
-        } else {
-          Row({ space: 8 }) {
-            this.buildModeTab('sms', '\u9a8c\u8bc1\u7801\u767b\u5f55')
-            this.buildModeTab('password', '\u8d26\u53f7\u5bc6\u7801')
-          }
-          .width('100%')
-
-          Column({ space: 12 }) {
-            if (this.loginMode === 'password') {
-              this.buildInput('\u8d26\u53f7', '\u8bf7\u8f93\u5165\u8d26\u53f7', this.account, this.onAccountChange)
-              this.buildPasswordInput('\u5bc6\u7801', '\u8bf7\u8f93\u5165\u5bc6\u7801', this.password, this.onPasswordChange)
-            } else {
-              this.buildInput('\u624b\u673a\u53f7', '\u8bf7\u8f93\u5165\u624b\u673a\u53f7', this.phoneNumber, this.onPhoneChange)
-
-              Row({ space: 12 }) {
-                Column() {
-                  this.buildInput('\u9a8c\u8bc1\u7801', '\u8bf7\u8f93\u5165\u9a8c\u8bc1\u7801', this.verificationCode, this.onCodeChange)
-                }
-                .layoutWeight(1)
-
-                Button(this.isSendingCode ? '\u53d1\u9001\u4e2d' : (this.codeCountdown > 0 ? `${this.codeCountdown}s` : '\u83b7\u53d6'))
-                  .width(104)
-                  .height(52)
-                  .fontSize(15)
-                  .fontColor(this.isSendingCode || this.codeCountdown > 0 ? '#8AA0B8' : '#FFFFFF')
-                  .backgroundColor(this.isSendingCode || this.codeCountdown > 0 ? '#EAF0F7' : '#2E79F4')
-                  .borderRadius(18)
-                  .onClick(() => {
-                    this.onRequestCode()
-                  })
-              }
-              .width('100%')
-            }
-          }
-          .width('100%')
-        }
-
-        Text(this.loginTip)
-          .width('100%')
-          .fontSize(12)
-          .fontColor('#607089')
-          .lineHeight(18)
-
-        Button(this.isLoggingIn ? (this.authScene === 'register' ? '\u6ce8\u518c\u4e2d...' : '\u767b\u5f55\u4e2d...') : (this.authScene === 'register' ? '\u6ce8\u518c' : '\u767b\u5f55'))
-          .width('100%')
-          .height(50)
-          .fontSize(17)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#FFFFFF')
-          .linearGradient({
-            angle: 90,
-            colors: this.isLoggingIn ? [['#9CB4D6', 0], ['#7F96B7', 1]] : [['#35C3EE', 0], ['#2E79F4', 1]]
-          })
-          .borderRadius(20)
-          .onClick(() => {
-            if (this.authScene === 'register') {
-              this.onRegister()
-            } else if (this.loginMode === 'password') {
-              this.onPasswordLogin()
-            } else {
-              this.onLogin()
-            }
-          })
-
-        Column({ space: 8 }) {
-          this.buildTag('\u8d26\u53f7\u5bc6\u7801\u767b\u5f55/\u6ce8\u518c\u5df2\u63a5\u5165 API')
-          this.buildTag(`\u63a5\u53e3\u5730\u5740\uff1a${this.apiBaseUrl}`)
-          this.buildTag('\u771f\u673a\u8c03\u8bd5\u8bf7\u6539\u4e3a\u5c40\u57df\u7f51 IP')
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
+      if (this.authScene === 'register') {
+        this.buildRegisterScene()
+      } else {
+        this.buildLoginScene()
       }
-      .width('100%')
-      .padding(24)
-      .backgroundColor('#FFFFFFE8')
-      .backgroundBlurStyle(BlurStyle.COMPONENT_ULTRA_THICK)
-      .borderRadius(30)
-      .shadow({ radius: 22, color: '#15304B16', offsetX: 0, offsetY: 10 })
     }
     .width('100%')
     .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .padding(20)
-    .backgroundImage($r('app.media.background'))
-    .backgroundImageSize(ImageSize.Cover)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 
   @Builder
-  private buildSceneTab(scene: string, label: string) {
-    Text(label)
-      .layoutWeight(1)
-      .height(36)
-      .textAlign(TextAlign.Center)
-      .fontSize(14)
-      .fontWeight(this.authScene === scene ? FontWeight.Medium : FontWeight.Regular)
-      .fontColor(this.authScene === scene ? '#2E79F4' : '#6F83A2')
-      .backgroundColor(this.authScene === scene ? '#EAF2FF' : '#F5F8FD')
-      .borderRadius(12)
-      .onClick(() => {
-        this.onAuthSceneChange(scene)
-      })
-  }
+  private buildLoginScene() {
+    Column() {
+      Column({ space: 18 }) {
+        Text(this.loginMode === 'password' ? '账号密码登录' : '短信验证码登录')
+          .width('100%')
+          .fontSize(24)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#11233C')
+          .textAlign(TextAlign.Center)
 
-  @Builder
-  private buildModeTab(mode: string, label: string) {
-    Text(label)
-      .layoutWeight(1)
-      .height(36)
-      .textAlign(TextAlign.Center)
-      .fontSize(14)
-      .fontWeight(this.loginMode === mode ? FontWeight.Medium : FontWeight.Regular)
-      .fontColor(this.loginMode === mode ? '#2E79F4' : '#6F83A2')
-      .backgroundColor(this.loginMode === mode ? '#EAF2FF' : '#F5F8FD')
-      .borderRadius(12)
-      .onClick(() => {
-        this.onLoginModeChange(mode)
-      })
-  }
+        if (this.loginMode === 'password') {
+          Column({ space: 14 }) {
+            this.buildInputField($r('sys.symbol.person_badge_plus'), '账号', '请输入账号', this.account, this.onAccountChange)
+            this.buildInputField($r('sys.symbol.lock_shield'), '密码', '请输入密码', this.password, this.onPasswordChange, true)
+          }
+          .width('100%')
+        } else {
+          Column({ space: 14 }) {
+            this.buildInputField($r('sys.symbol.phone'), '手机号', '请输入手机号', this.phoneNumber, this.onPhoneChange)
+            this.buildCodeField()
+          }
+          .width('100%')
+        }
 
-  @Builder
-  private buildInput(label: string, placeholder: string, value: string, onChange: (value: string) => void) {
-    Column({ space: 8 }) {
-      Text(label)
-        .fontSize(14)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#1F2A44')
+        this.buildInlineTip()
 
-      TextInput({ text: value, placeholder })
+        this.buildSubmitButton(false)
+
+        Row() {
+          Button(this.loginMode === 'password' ? '短信验证码登录' : '账号密码登录')
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#5A8BEA')
+            .backgroundColor(Color.Transparent)
+            .borderRadius(6)
+            .padding({ left: 4, right: 4, top: 1, bottom: 1 })
+            .constraintSize({ minWidth: 92, minHeight: 20 })
+            .stateEffect(false)
+            .onClick(() => {
+              this.onLoginModeChange(this.loginMode === 'password' ? 'sms' : 'password')
+            })
+
+          Button('没有账号？')
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#5A8BEA')
+            .backgroundColor(Color.Transparent)
+            .borderRadius(6)
+            .padding({ left: 4, right: 4, top: 1, bottom: 1 })
+            .constraintSize({ minWidth: 80, minHeight: 20 })
+            .stateEffect(false)
+            .onClick(() => {
+              this.onAuthSceneChange('register')
+            })
+        }
         .width('100%')
-        .height(52)
-        .fontSize(16)
-        .type(InputType.Normal)
-        .backgroundColor('#F5F8FD')
-        .borderRadius(18)
-        .padding({ left: 16, right: 16 })
-        .onChange((input: string) => {
-          onChange(input)
-        })
+        .justifyContent(FlexAlign.SpaceBetween)
+        .margin({ top: -10 })
+      }
+      .width('100%')
+
+      Blank()
+        .layoutWeight(1)
+
+      Text('登录即代表同意《用户协议》与《隐私条款》')
+        .width('100%')
+        .fontSize(12)
+        .lineHeight(18)
+        .textAlign(TextAlign.Center)
+        .fontColor('#7C8FA6')
+    }
+    .width('100%')
+    .height('100%')
+    .justifyContent(FlexAlign.Start)
+    .padding({ left: 22, right: 22, top: 28, bottom: 18 })
+  }
+
+  @Builder
+  private buildRegisterScene() {
+    Scroll() {
+      Column() {
+        Column({ space: 18 }) {
+          Stack() {
+            Text('创建听桥账号')
+              .width('100%')
+              .fontSize(24)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#11233C')
+              .textAlign(TextAlign.Center)
+
+            Row() {
+              Button() {
+                SymbolGlyph($r('sys.symbol.chevron_backward'))
+                  .fontSize(21)
+                  .fontColor(['#7E8794'])
+              }
+              .width(36)
+              .height(36)
+              .backgroundColor(Color.Transparent)
+              .borderRadius(10)
+              .stateEffect(false)
+              .onClick(() => {
+                this.onAuthSceneChange('login')
+              })
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.Start)
+            .position({ x: -12, y: 0 })
+          }
+          .width('100%')
+          .height(32)
+
+          Column({ space: 14 }) {
+            this.buildInputField($r('sys.symbol.person_badge_plus'), '注册账号', '请输入账号', this.registerAccount,
+              this.onRegisterAccountChange)
+            this.buildInputField($r('sys.symbol.lock_shield'), '设置密码', '至少 6 位', this.registerPassword,
+              this.onRegisterPasswordChange, true)
+            this.buildInputField($r('sys.symbol.checkmark_circle'), '确认密码', '再次输入密码', this.registerConfirmPassword,
+              this.onRegisterConfirmPasswordChange, true)
+            this.buildInputField($r('sys.symbol.phone'), '手机号（可选）', '用于后续找回密码', this.registerPhone,
+              this.onRegisterPhoneChange)
+          }
+          .width('100%')
+
+          this.buildInlineTip()
+
+          this.buildSubmitButton(true)
+        }
+        .width('100%')
+        .padding({ left: 0, right: 0, top: 0, bottom: 16 })
+      }
+      .width('100%')
+      .padding({ left: 22, right: 22, top: 28, bottom: 28 })
+      .constraintSize({ minHeight: '100%' })
+      .alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Start)
+    }
+    .width('100%')
+    .height('100%')
+    .scrollBar(BarState.Off)
+  }
+
+  @Builder
+  private buildInputField(icon: Resource, label: string, placeholder: string, value: string,
+    onChange: (value: string) => void, isPassword: boolean = false) {
+    Column({ space: 7 }) {
+      Text(label)
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#3F5672')
+        .letterSpacing(0.3)
+
+      Row({ space: 12 }) {
+        SymbolGlyph(icon)
+          .fontSize(18)
+          .fontColor(['#7C96B8'])
+
+        TextInput({ text: value, placeholder })
+          .layoutWeight(1)
+          .height(50)
+          .fontSize(16)
+          .fontColor('#1D2F45')
+          .type(isPassword ? InputType.Password : InputType.Normal)
+          .backgroundColor(Color.Transparent)
+          .padding({ left: 0, right: 0 })
+          .placeholderFont({ size: 15 })
+          .placeholderColor('#778CA7')
+          .onChange((input: string) => {
+            onChange(input)
+          })
+      }
+      .width('100%')
+      .height(52)
+      .padding({ left: 15, right: 15 })
+      .backgroundColor('#F8FBFF')
+      .borderRadius(16)
+      .border({ width: 1, color: '#C8D8EA' })
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
-  private buildPasswordInput(label: string, placeholder: string, value: string, onChange: (value: string) => void) {
-    Column({ space: 8 }) {
-      Text(label)
-        .fontSize(14)
+  private buildCodeField() {
+    Column({ space: 7 }) {
+      Text('验证码')
+        .fontSize(13)
         .fontWeight(FontWeight.Medium)
-        .fontColor('#1F2A44')
+        .fontColor('#3F5672')
+        .letterSpacing(0.3)
 
-      TextInput({ text: value, placeholder })
-        .width('100%')
+      Row({ space: 10 }) {
+        Row({ space: 10 }) {
+          SymbolGlyph($r('sys.symbol.ellipsis_bubble'))
+            .fontSize(18)
+            .fontColor(['#7C96B8'])
+
+          TextInput({ text: this.verificationCode, placeholder: '请输入验证码' })
+            .layoutWeight(1)
+            .height(50)
+            .fontSize(16)
+            .fontColor('#1D2F45')
+            .backgroundColor(Color.Transparent)
+            .padding({ left: 0, right: 0 })
+            .placeholderFont({ size: 15 })
+            .placeholderColor('#778CA7')
+            .onChange((input: string) => {
+              this.onCodeChange(input)
+            })
+        }
+        .layoutWeight(1)
         .height(52)
-        .fontSize(16)
-        .type(InputType.Password)
-        .backgroundColor('#F5F8FD')
-        .borderRadius(18)
-        .padding({ left: 16, right: 16 })
-        .onChange((input: string) => {
-          onChange(input)
-        })
+        .padding({ left: 15, right: 15 })
+        .backgroundColor('#F8FBFF')
+        .borderRadius(16)
+        .border({ width: 1, color: '#C8D8EA' })
+
+        Button(this.isSendingCode ? '发送中' : (this.codeCountdown > 0 ? `${this.codeCountdown}s` : '获取验证码'))
+          .width(96)
+          .height(52)
+          .fontSize(11)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.isSendingCode || this.codeCountdown > 0 ? '#9DB4CC' : '#7C9FE9')
+          .backgroundColor('#FFFFFF')
+          .borderRadius(16)
+          .border({
+            width: 1,
+            color: this.isSendingCode || this.codeCountdown > 0 ? '#DCE8F5' : '#CFE0FB'
+          })
+          .onClick(() => {
+            this.onRequestCode()
+          })
+      }
+      .width('100%')
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
-  private buildTag(label: string) {
-    Text(label)
-      .fontSize(12)
-      .fontColor('#3A71C1')
-      .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-      .backgroundColor('#EEF5FF')
-      .borderRadius(14)
+  private buildTipCard() {
+    Row({ space: 10 }) {
+      SymbolGlyph($r('sys.symbol.info_circle'))
+        .fontSize(14)
+        .fontColor(['#7A9ABF'])
+
+      Text(this.loginTip)
+        .layoutWeight(1)
+        .fontSize(12)
+        .lineHeight(18)
+        .fontColor('#7A9ABF')
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Center)
+    .padding({ left: 14, right: 14, top: 11, bottom: 11 })
+    .backgroundColor('#EEF5FF')
+    .borderRadius(14)
+    .border({ width: 1, color: '#D5E5FF' })
+  }
+
+  @Builder
+  private buildInlineTip() {
+    if (this.shouldShowInlineTip()) {
+      Text(this.loginTip)
+        .width('100%')
+        .fontSize(12)
+        .lineHeight(18)
+        .fontColor(this.getInlineTipColor())
+        .textAlign(TextAlign.Start)
+        .margin({ top: -4 })
+    }
+  }
+
+  private shouldShowInlineTip(): boolean {
+    if (this.loginTip.length === 0) {
+      return false
+    }
+    if (this.loginTip === '请输入手机号并获取验证码。') {
+      return false
+    }
+    if (this.loginTip === '请输入账号和密码进行登录') {
+      return false
+    }
+    if (this.loginTip === '填写信息后即可完成注册') {
+      return false
+    }
+    return true
+  }
+
+  private getInlineTipColor(): string {
+    if (this.loginTip.indexOf('成功') >= 0) {
+      return '#2BA471'
+    }
+    if (this.loginTip.indexOf('正在') >= 0 || this.loginTip.indexOf('已') === 0) {
+      return '#7A8CA7'
+    }
+    return '#E5484D'
+  }
+
+  @Builder
+  private buildSubmitButton(isRegister: boolean) {
+    Button() {
+      Text(this.isLoggingIn ? (isRegister ? '注册中...' : '登录中...') : (isRegister ? '注册账号' : '立即登录'))
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#FFFFFF')
+        .letterSpacing(0.5)
+    }
+    .width('100%')
+    .height(54)
+    .linearGradient({
+      angle: 105,
+      colors: this.isLoggingIn
+        ? [['#90B0D8', 0], ['#6E8EB8', 1]]
+        : [['#3AAAE8', 0], ['#1848DE', 1]]
+    })
+    .borderRadius(18)
+    .shadow({ radius: 22, color: '#1848DE2A', offsetX: 0, offsetY: 10 })
+    .onClick(() => {
+      if (isRegister) {
+        this.onRegister()
+      } else if (this.loginMode === 'password') {
+        this.onPasswordLogin()
+      } else {
+        this.onLogin()
+      }
+    })
   }
 }

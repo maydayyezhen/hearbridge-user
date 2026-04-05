@@ -5,13 +5,7 @@ export class RecentCourseItem {
   coverUrl: string
   progressPercent: number
 
-  constructor(
-    courseCode: string,
-    courseName: string,
-    lastLearnedAt: string,
-    coverUrl: string,
-    progressPercent: number
-  ) {
+  constructor(courseCode: string, courseName: string, lastLearnedAt: string, coverUrl: string, progressPercent: number) {
     this.courseCode = courseCode
     this.courseName = courseName
     this.lastLearnedAt = lastLearnedAt
@@ -39,44 +33,58 @@ export struct RecordPage {
   @Prop trendPoints: TrendPointItem[] = []
   @Prop recentCourses: RecentCourseItem[] = []
   @Prop loading: boolean = false
+  @Prop loadingMoreRecentCourses: boolean = false
+  @Prop hasMoreRecentCourses: boolean = false
   @Prop tip: string = ''
   onFilterChange: (filter: string) => void = () => {}
   onOpenTraining: () => void = () => {}
+  onLoadMoreRecentCourses: () => void = () => {}
   onOpenRecentCourse: (courseCode: string) => void = (_courseCode: string) => {}
 
   private readonly filters: string[] = ['日', '周', '总览']
+  private readonly pageScroller: Scroller = new Scroller()
 
   build() {
-    Column({ space: 18 }) {
-      if (this.loading) {
-        Row({ space: 8 }) {
-          LoadingProgress()
-            .width(18)
-            .height(18)
-            .color('#2E79F4')
+    Scroll(this.pageScroller) {
+      Column({ space: 18 }) {
+        if (this.loading) {
+          Row({ space: 8 }) {
+            LoadingProgress()
+              .width(18)
+              .height(18)
+              .color('#2E79F4')
 
-          Text('正在加载学习记录...')
-            .fontSize(13)
-            .fontColor('#6E8099')
-        }
-        .width('100%')
-        .justifyContent(FlexAlign.Center)
-      }
-
-      if (this.tip.length > 0) {
-        Text(this.tip)
+            Text('正在加载学习记录...')
+              .fontSize(13)
+              .fontColor('#6E8099')
+          }
           .width('100%')
-          .fontSize(13)
-          .fontColor('#E5484D')
-          .textAlign(TextAlign.Center)
-      }
+          .justifyContent(FlexAlign.Center)
+        }
 
-      this.buildSummaryCard()
-      this.buildTrendCard()
-      this.buildHistoryCard()
+        if (!this.loading && this.tip.length > 0) {
+          Text(this.tip)
+            .width('100%')
+            .fontSize(13)
+            .fontColor('#E5484D')
+            .textAlign(TextAlign.Center)
+        }
+
+        this.buildSummaryCard()
+        this.buildTrendCard()
+        this.buildHistoryCard()
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 6, bottom: 118 })
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 6, bottom: 118 })
+    .height('100%')
+    .scrollBar(BarState.Off)
+    .onScrollEdge((side: Edge) => {
+      if (side === Edge.Bottom && this.hasMoreRecentCourses && !this.loadingMoreRecentCourses) {
+        this.onLoadMoreRecentCourses()
+      }
+    })
   }
 
   @Builder
@@ -257,6 +265,29 @@ export struct RecordPage {
         ForEach(this.recentCourses, (item: RecentCourseItem) => {
           this.buildRecentCourseCard(item)
         }, (item: RecentCourseItem) => `${item.courseCode}_${item.lastLearnedAt}`)
+
+        if (this.loadingMoreRecentCourses) {
+          Row({ space: 8 }) {
+            LoadingProgress()
+              .width(16)
+              .height(16)
+              .color('#2E79F4')
+
+            Text('正在加载更多课程...')
+              .fontSize(12)
+              .fontColor('#7A8CA7')
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+          .padding({ top: 6, bottom: 4 })
+        } else if (!this.hasMoreRecentCourses) {
+          Text('没有更多课程了')
+            .width('100%')
+            .fontSize(12)
+            .fontColor('#9AACBF')
+            .textAlign(TextAlign.Center)
+            .padding({ top: 4, bottom: 2 })
+        }
       }
     }
     .width('100%')

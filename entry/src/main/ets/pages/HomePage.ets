@@ -1,17 +1,3 @@
-class HomeworkItem {
-  title: string
-  minutes: string
-  accent: string
-  coverUrl: string
-
-  constructor(title: string, minutes: string, accent: string, coverUrl: string) {
-    this.title = title
-    this.minutes = minutes
-    this.accent = accent
-    this.coverUrl = coverUrl
-  }
-}
-
 class WeatherSummary {
   label: string
   detail: string
@@ -26,27 +12,24 @@ class WeatherSummary {
 export struct HomePage {
   @Prop dailyProgress: number = 0
   @Prop avatarUrl: string = ''
+  @Prop heroTitle: string = '你好，准备开始训练'
+  @Prop heroSubtitle: string = '面向听障训练的口语与手语学习平台'
+  @Prop heroMediaUrl: string = ''
+  @Prop todayStatusPercent: number = 40
+  @Prop todayStatusTitle: string = '今天状态已更新'
+  @Prop todayStatusDetail: string = '继续保持当前训练节奏。'
+  @Prop recommendCourseName: string = '日常问候入门'
+  @Prop recommendText: string = '用最简单的表达开始今天的练习'
+  @Prop recommendDurationText: string = '5 分钟可完成'
+  @Prop recommendCoverUrl: string = ''
   @State currentDateText: string = ''
   @State currentTimeText: string = ''
   @State weatherSummary: WeatherSummary = new WeatherSummary('实时天气', '多云 24°C')
   onOpenGestureCourses: () => void = () => {}
   onOpenSpeechCourses: () => void = () => {}
+  onOpenHeroTraining: () => void = () => {}
+  onOpenTodayRecommend: () => void = () => {}
   private clockTimer: number = -1
-
-  private readonly homeworkItems: HomeworkItem[] = [
-    new HomeworkItem(
-      '日常问候入门',
-      '5 分钟',
-      '#3A86FF',
-      'http://10.133.132.87:9001/hearbridge-bucket/20260316/3ad909fc0af94c58a8f2be4ca2fe4cbcChatGPT%20Image%202026%E5%B9%B43%E6%9C%8816%E6%97%A5%2001_25_49.png'
-    ),
-    new HomeworkItem(
-      '清晰口型训练',
-      '8 分钟',
-      '#36CFC9',
-      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80'
-    )
-  ]
 
   aboutToAppear() {
     this.updateLiveSummary()
@@ -98,11 +81,37 @@ export struct HomePage {
     return new WeatherSummary('夜间天气', '微凉安静 20°C')
   }
 
+  private getHeroGreetingByHour(hour: number): string {
+    if (hour >= 5 && hour < 11) {
+      return '早安，来练一会儿'
+    }
+    if (hour >= 11 && hour < 14) {
+      return '中午好，保持节奏'
+    }
+    if (hour >= 14 && hour < 18) {
+      return '下午好，继续推进'
+    }
+    if (hour >= 18 && hour < 23) {
+      return '晚上好，完成今日目标'
+    }
+    return '夜深了，也可以轻练一下'
+  }
+
+  private getHeroActionLabelByHour(hour: number): string {
+    if (hour >= 5 && hour < 11) {
+      return '开始晨练'
+    }
+    if (hour >= 18 && hour < 23) {
+      return '开始晚练'
+    }
+    return '开始训练'
+  }
+
   build() {
     Column({ space: 18 }) {
       this.buildHeroCard()
-      this.buildQuickActions()
-      this.buildHomeworkSection()
+      this.buildTodayStatusCard()
+      this.buildTodayCourseCard()
     }
     .width('100%')
     .padding({ left: 16, right: 16, top: 6, bottom: 118 })
@@ -110,326 +119,217 @@ export struct HomePage {
 
   @Builder
   private buildHeroCard() {
-    Column({ space: 14 }) {
-      Row() {
-        Column({ space: 6 }) {
-          Text('你好，准备开始训练')
-            .fontSize(28)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#1F2A44')
-
-          Text(`${this.currentDateText} · ${this.currentTimeText}`)
-            .fontSize(14)
-            .fontColor('#5E6D85')
-        }
-        .alignItems(HorizontalAlign.Start)
-
-        Blank()
-
-        Image(this.avatarUrl)
-          .width(46)
-          .height(46)
-          .objectFit(ImageFit.Cover)
-          .borderRadius(23)
-          .border({ width: 2, color: '#FFFFFFAA' })
-      }
-      .width('100%')
-
-      Row({ space: 10 }) {
-        this.buildWeatherInfoPill(this.weatherSummary.label, this.weatherSummary.detail)
-        this.buildHeroInfoPill('今日目标', `${Math.min(5, Math.max(1, Math.ceil(this.dailyProgress / 20)))}/5`)
-      }
-      .width('100%')
-
-      Column({ space: 8 }) {
-        Row() {
-          Text('今日进度')
-            .fontSize(12)
-            .fontColor('#5E6D85')
-
-          Blank()
-
-          Text(`${this.dailyProgress}%`)
-            .fontSize(12)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#2E79F4')
-        }
-        .width('100%')
-
-        Stack({ alignContent: Alignment.Start }) {
-          Row() {
-          }
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.heroMediaUrl.length > 0) {
+        Image(this.heroMediaUrl)
           .width('100%')
-          .height(10)
-          .backgroundColor('#FFFFFF99')
-          .borderRadius(8)
-
-          Row() {
-          }
-          .width(`${this.dailyProgress}%`)
-          .height(10)
+          .height('100%')
+          .objectFit(ImageFit.Cover)
+      } else {
+        Column()
+          .width('100%')
+          .height('100%')
           .linearGradient({
-            angle: 90,
-            colors: [['#67D4F3', 0], ['#2E79F4', 1]]
+            angle: 135,
+            colors: [
+              ['#A9D4FF', 0],
+              ['#7DBDFF', 0.45],
+              ['#5D9DF7', 1]
+            ]
           })
-          .borderRadius(8)
-        }
+      }
+
+      Row()
         .width('100%')
-        .height(10)
-      }
-
-      Row({ space: 12 }) {
-        this.buildActionTile($r('sys.symbol.paperplane'), '手势训练', '#3478F6', '#2364E8', () => {
-          this.onOpenGestureCourses()
+        .height('100%')
+        .linearGradient({
+          angle: 0,
+          colors: [
+            ['rgba(255,255,255,0.20)', 0],
+            ['rgba(255,255,255,0.10)', 0.42],
+            ['rgba(255,255,255,0.00)', 1]
+          ]
         })
-        this.buildActionTile($r('sys.symbol.ellipsis_message'), '口语训练', '#3EC8F6', '#31A8F0', () => {
-          this.onOpenSpeechCourses()
-        })
-      }
-      .width('100%')
-    }
-    .width('100%')
-    .padding({ left: 20, right: 20, top: 22, bottom: 20 })
-    .backgroundImage($r('app.media.background'))
-    .backgroundImageSize(ImageSize.Cover)
-    .backgroundBlurStyle(BlurStyle.COMPONENT_ULTRA_THICK)
-    .borderRadius(30)
-  }
 
-  @Builder
-  private buildHeroInfoPill(label: string, value: string) {
-    Column({ space: 4 }) {
-      Text(label)
-        .fontSize(11)
-        .fontColor('#6E7F98')
-
-      Text(value)
-        .fontSize(14)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#1F2A44')
-    }
-    .alignItems(HorizontalAlign.Start)
-    .layoutWeight(1)
-    .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-    .backgroundColor('#F8FBFFCC')
-    .borderRadius(16)
-    .border({ width: 1, color: '#DCE8F8' })
-  }
-
-  @Builder
-  private buildWeatherInfoPill(label: string, value: string) {
-    Row({ space: 10 }) {
-      Stack({ alignContent: Alignment.Center }) {
-        Row() {
-        }
-        .width(34)
-        .height(34)
-        .backgroundColor('#FFFFFF')
-        .borderRadius(17)
-        .border({ width: 1, color: '#DCE8F8' })
-
-        SymbolGlyph($r('sys.symbol.cloud'))
-          .fontSize(18)
-          .fontColor(['#5D8DE8'])
-      }
-      .width(34)
-      .height(34)
-
-      Column({ space: 4 }) {
-        Text(label)
-          .fontSize(11)
-          .fontColor('#6E7F98')
-
-        Text(value)
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#1F2A44')
-      }
-      .alignItems(HorizontalAlign.Start)
-      .layoutWeight(1)
-    }
-    .alignItems(VerticalAlign.Center)
-    .layoutWeight(1)
-    .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-    .backgroundColor('#F8FBFFCC')
-    .borderRadius(16)
-    .border({ width: 1, color: '#DCE8F8' })
-  }
-
-  @Builder
-  private buildQuickActions() {
-    Row({ space: 12 }) {
-      this.buildInfoCard('今日训练进度', `${this.dailyProgress}%`, '继续保持，节奏很稳')
-      this.buildInfoCard('本周打卡', '7 天', '已经进入稳定训练期')
-    }
-    .width('100%')
-  }
-
-  @Builder
-  private buildHomeworkSection() {
-    Column({ space: 14 }) {
       Row() {
-        Column({ space: 4 }) {
-          Text('候练课程')
-            .fontSize(18)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#1F2A44')
+        Column({ space: 30 }) {
+          Column({ space: 2 }) {
+            Text(this.getHeroGreetingByHour(new Date().getHours()))
+              .fontSize(22)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(Color.White)
+              .maxLines(1)
+              .opacity(0.9)
 
-          Text('根据今日状态推荐')
-            .fontSize(12)
-            .fontColor('#7B8BA5')
+            Text(this.heroTitle.length > 0 ? this.heroTitle : '来练一会儿吧')
+              .fontSize(26)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(Color.White)
+              .maxLines(1)
+              .opacity(1.0)
+          }
+          .alignItems(HorizontalAlign.Start)
+
+          Button() {
+            Row({ space: 6 }) {
+              Text(this.getHeroActionLabelByHour(new Date().getHours()))
+                .fontSize(14)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#2E79F4')
+              Text('->')
+                .fontSize(14)
+                .fontColor('#2E79F4')
+            }
+          }
+          .type(ButtonType.Capsule)
+          .backgroundColor('rgba(255,255,255,0.92)')
+          .height(36)
+          .padding({ left: 16, right: 16 })
+          .margin({ top: 6 })
+          .onClick(() => {
+            this.onOpenHeroTraining()
+          })
         }
         .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Center)
+        .width('58%')
+        .height('100%')
+        .padding({ left: 20, right: 12, top: 20, bottom: 20 })
 
         Blank()
-
-        Text('...')
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#7B8BA5')
       }
       .width('100%')
-
-      ForEach(this.homeworkItems, (item: HomeworkItem) => {
-        this.buildHomeworkCard(item)
-      }, (item: HomeworkItem) => item.title)
+      .height('100%')
     }
     .width('100%')
-    .padding(18)
-    .backgroundColor('#FFFFFF')
-    .borderRadius(22)
-    .shadow({ radius: 20, color: '#15304B12', offsetX: 0, offsetY: 10 })
+    .height(200)
+    .borderRadius(30)
+    .clip(true)
+    .margin({ top: 12, bottom: 18 })
+    .shadow({
+      radius: 16,
+      color: 'rgba(46,121,244,0.10)',
+      offsetX: 0,
+      offsetY: 6
+    })
   }
 
   @Builder
-  private buildActionTile(icon: Resource, label: string, startColor: string, endColor: string, onClickAction: () => void) {
+  private buildTodayStatusCard() {
     Column({ space: 10 }) {
-      Stack({ alignContent: Alignment.Center }) {
-        Row() {
-        }
-        .width(36)
-        .height(36)
-        .backgroundColor('#FFFFFFE6')
-        .borderRadius(12)
-        .border({ width: 1, color: '#FFFFFF66' })
+      Text('今日状态')
+        .fontSize(14)
+        .fontColor('#8A93A6')
 
-        SymbolGlyph(icon)
-          .fontSize(20)
-          .fontColor(['#2E79F4'])
+      Column({ space: 6 }) {
+        Text(`${this.todayStatusPercent}%`)
+          .fontSize(32)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#2E79F4')
+
+        Text(this.todayStatusTitle)
+          .fontSize(12)
+          .fontColor('#8A93A6')
+          .maxLines(1)
+
+        Text(this.todayStatusDetail)
+          .fontSize(12)
+          .fontColor('#A0A8B8')
+          .maxLines(1)
       }
-      .width(36)
-      .height(36)
-
-      Text(label)
-        .fontSize(15)
-        .fontWeight(FontWeight.Medium)
-        .fontColor('#FFFFFF')
     }
-    .justifyContent(FlexAlign.Center)
-    .width('50%')
-    .height(122)
-    .linearGradient({
-      angle: 135,
-      colors: [[startColor, 0], [endColor, 1]]
-    })
-    .borderRadius(24)
-    .shadow({ radius: 16, color: `${startColor}33`, offsetX: 0, offsetY: 8 })
-    .onClick(() => {
-      onClickAction()
-    })
-  }
-
-  @Builder
-  private buildInfoCard(title: string, value: string, subtitle: string) {
-    Column({ space: 8 }) {
-      Text(title)
-        .fontSize(13)
-        .fontColor('#7B8BA5')
-
-      Text(value)
-        .fontSize(26)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#2563EB')
-
-      Text(subtitle)
-        .fontSize(12)
-        .fontColor('#5E6D85')
-        .maxLines(2)
-    }
-    .alignItems(HorizontalAlign.Start)
-    .layoutWeight(1)
-    .padding(18)
+    .width('100%')
+    .padding(20)
     .backgroundColor('#FFFFFF')
     .borderRadius(24)
-    .shadow({ radius: 18, color: '#15304B10', offsetX: 0, offsetY: 8 })
+    .shadow({
+      radius: 12,
+      color: 'rgba(0,0,0,0.04)',
+      offsetX: 0,
+      offsetY: 4
+    })
   }
 
   @Builder
-  private buildHomeworkCard(item: HomeworkItem) {
-    Row({ space: 14 }) {
-      Stack({ alignContent: Alignment.BottomEnd }) {
-        Image(item.coverUrl)
-          .width(88)
-          .height(50)
+  private buildTodayCourseCard() {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.recommendCoverUrl.length > 0) {
+        Image(this.recommendCoverUrl)
+          .width('100%')
+          .height('100%')
           .objectFit(ImageFit.Cover)
-          .borderRadius(12)
+      } else {
+        Column()
+          .width('100%')
+          .height('100%')
+          .linearGradient({
+            angle: 135,
+            colors: [
+              ['#DCEBFF', 0],
+              ['#C4DEFF', 0.55],
+              ['#B2D3FF', 1]
+            ]
+          })
+      }
 
-        Column() {
-        }
-        .width(88)
-        .height(50)
+      // 第一层：整体压暗
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('rgba(10,18,32,0.20)')
+
+      // 第二层：底部再加深，保证文字可读
+      Column()
+        .width('100%')
+        .height('100%')
         .linearGradient({
           angle: 180,
-          colors: [['#00000008', 0], ['#00000024', 1]]
+          colors: [
+            ['rgba(10,18,32,0.08)', 0],
+            ['rgba(10,18,32,0.26)', 0.5],
+            ['rgba(10,18,32,0.58)', 1]
+          ]
         })
-        .borderRadius(12)
 
-        Stack({ alignContent: Alignment.Center }) {
-          Row() {
-          }
-          .width(28)
-          .height(28)
-          .backgroundColor('#FFFFFFE8')
-          .borderRadius(14)
-          .border({ width: 1, color: '#DCE8F8' })
+      Column({ space: 12 }) {
+        Text('今日推荐')
+          .fontSize(14)
+          .fontColor('rgba(255,255,255,0.92)')
 
-          SymbolGlyph($r('sys.symbol.square_grid_2x2'))
-            .fontSize(14)
-            .fontColor(['#3A86FF'])
-        }
-        .width(28)
-        .height(28)
-        .margin({ right: 8, bottom: 8 })
-      }
+        Column({ space: 6 }) {
+          Text(this.recommendCourseName)
+            .fontSize(20)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#FFFFFF')
+            .maxLines(1)
 
-      Column({ space: 10 }) {
-        Text(item.title)
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#1F2A44')
+          Text(this.recommendText)
+            .fontSize(12)
+            .fontColor('rgba(255,255,255,0.88)')
+            .maxLines(2)
 
-        Row({ space: 8 }) {
-          this.buildMetaTag('推荐')
-          this.buildMetaTag(item.minutes)
+          Text(this.recommendDurationText)
+            .fontSize(12)
+            .fontColor('#D6E7FF')
+            .maxLines(1)
         }
       }
-      .alignItems(HorizontalAlign.Start)
-
-      Blank()
+      .width('100%')
+      .padding(20)
+      .alignItems(HorizontalAlign.Center)
     }
     .width('100%')
-    .padding(14)
-    .backgroundColor('#F7FAFE')
-    .borderRadius(16)
-  }
-
-  @Builder
-  private buildMetaTag(label: string) {
-    Text(label)
-      .fontSize(11)
-      .fontColor('#63738C')
-      .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-      .backgroundColor('#FFFFFF')
-      .borderRadius(12)
+    .height(150)
+    .borderRadius(24)
+    .clip(true)
+    .shadow({
+      radius: 12,
+      color: 'rgba(0,0,0,0.04)',
+      offsetX: 0,
+      offsetY: 4
+    })
+    .onClick(() => {
+      this.onOpenTodayRecommend()
+    })
   }
 }

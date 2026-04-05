@@ -1,6 +1,6 @@
 import common from '@ohos.app.ability.common'
 import { readToken } from '../api/AuthStorage'
-import { getCourseDetail } from '../api/CourseApi'
+import { CourseDetailData, getCourseDetail } from '../api/CourseApi'
 import { getTrainingSessionDetail, startTrainingSession, TrainingSessionItemDto } from '../api/TrainingApi'
 import { TrainingItem, mapSessionItemToTrainingItem } from './train/TrainData'
 import { CourseTrainingItemList } from './train/components/CourseTrainingItemList'
@@ -8,6 +8,23 @@ import { FocusTagChip } from './train/components/FocusTagChip'
 
 function normalizeDebugBaseUrl(baseUrl: string): string {
   return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
+}
+
+const COURSE_DETAIL_FIELD_CACHE: Map<string, CourseDetailData> = new Map()
+class CourseSessionFieldCacheEntry {
+  sessionProgressPercent: number = 0
+  completedItemCount: number = 0
+  totalItemCount: number = 0
+  currentItemCode: string = ''
+  currentItemStatus: string = ''
+  trainingType: string = 'gesture'
+  items: TrainingSessionItemDto[] = []
+}
+const COURSE_SESSION_FIELD_CACHE: Map<string, CourseSessionFieldCacheEntry> = new Map()
+
+export function clearCourseDetailFieldCache() {
+  COURSE_DETAIL_FIELD_CACHE.clear()
+  COURSE_SESSION_FIELD_CACHE.clear()
 }
 
 @Component
@@ -94,15 +111,8 @@ export struct CourseDetailPage {
     }
     this.detailLoading = true
     this.detailTip = '正在加载课程内容...'
-    this.debugCourseCode = this.courseCode
-    this.debugStartJson = ''
-    this.debugSessionJson = ''
-    this.debugStartUrl = `${normalizeDebugBaseUrl(this.apiBaseUrl)}/app/training/session/start`
-    this.debugDetailUrl = ''
-    this.debugStartBody = JSON.stringify({ courseCode: this.courseCode })
     try {
       const token = await readToken(this.getAbilityContext())
-      this.debugTokenPresent = token.length > 0 ? 'true' : 'false'
       if (token.length === 0) {
         this.detailTip = '登录已失效，请重新登录。'
         return
@@ -121,12 +131,24 @@ export struct CourseDetailPage {
   }
 
   private async loadCourseDetail(token: string) {
+    const cachedDetail = COURSE_DETAIL_FIELD_CACHE.get(this.courseCode)
+    if (cachedDetail) {
+      this.displayCourseName = cachedDetail.courseName
+      this.displayCourseIntro = cachedDetail.intro
+      this.displayCoverUrl = cachedDetail.coverUrl
+      this.displayTrainingType = this.normalizeTrainingType(cachedDetail.trainingType)
+      this.displayTags = cachedDetail.tags
+      this.detailTip = ''
+      return
+    }
+
     const result = await getCourseDetail(this.apiBaseUrl, token, this.courseCode)
     if (!result.ok || !result.data) {
       this.detailTip = result.message.length > 0 ? result.message : `课程详情加载失败（错误码 ${result.code}）`
       return
     }
 
+    COURSE_DETAIL_FIELD_CACHE.set(this.courseCode, result.data)
     this.displayCourseName = result.data.courseName
     this.displayCourseIntro = result.data.intro
     this.displayCoverUrl = result.data.coverUrl
@@ -136,28 +158,45 @@ export struct CourseDetailPage {
   }
 
   private async loadTrainingSession(token: string) {
+    const cachedSession = COURSE_SESSION_FIELD_CACHE.get(this.courseCode)
+    if (cachedSession) {
+      this.sessionProgressPercent = cachedSession.sessionProgressPercent
+      this.completedItemCount = cachedSession.completedItemCount
+      this.totalItemCount = cachedSession.totalItemCount
+      this.currentItemCode = cachedSession.currentItemCode
+      this.currentItemStatus = cachedSession.currentItemStatus
+      this.applySessionItems(cachedSession.trainingType, cachedSession.items)
+      this.detailTip = ''
+      return
+    }
+
     const startResult = await startTrainingSession(this.apiBaseUrl, token, this.courseCode)
-    this.debugStartJson = startResult.rawBody
     if (!startResult.ok || !startResult.data) {
       this.detailTip = startResult.message.length > 0 ? startResult.message : `训练信息加载失败（错误码 ${startResult.code}）`
       return
     }
 
-    this.debugDetailUrl = `${normalizeDebugBaseUrl(this.apiBaseUrl)}/app/training/session/${startResult.data.sessionId}`
     const detailResult = await getTrainingSessionDetail(this.apiBaseUrl, token, startResult.data.sessionId)
     if (!detailResult.ok || !detailResult.data) {
-      this.debugSessionJson = detailResult.rawBody
       this.detailTip = detailResult.message.length > 0 ? detailResult.message : `训练详情加载失败（错误码 ${detailResult.code}）`
       return
     }
 
-    this.debugSessionJson = detailResult.rawBody
     this.sessionProgressPercent = detailResult.data.progressPercent
     this.completedItemCount = detailResult.data.completedItemCount
     this.totalItemCount = detailResult.data.totalItemCount
     this.currentItemCode = detailResult.data.currentItemCode
     this.currentItemStatus = startResult.data.currentItemStatus
     this.applySessionItems(detailResult.data.trainingType, detailResult.data.items)
+    const cacheEntry = new CourseSessionFieldCacheEntry()
+    cacheEntry.sessionProgressPercent = detailResult.data.progressPercent
+    cacheEntry.completedItemCount = detailResult.data.completedItemCount
+    cacheEntry.totalItemCount = detailResult.data.totalItemCount
+    cacheEntry.currentItemCode = detailResult.data.currentItemCode
+    cacheEntry.currentItemStatus = startResult.data.currentItemStatus
+    cacheEntry.trainingType = detailResult.data.trainingType
+    cacheEntry.items = detailResult.data.items
+    COURSE_SESSION_FIELD_CACHE.set(this.courseCode, cacheEntry)
     this.detailTip = ''
   }
 
@@ -205,8 +244,6 @@ export struct CourseDetailPage {
           }
           this.buildCourseMetaSection()
           this.buildActionRow()
-          this.buildDebugSection()
-
           CourseTrainingItemList({
             items: this.courseItems,
             completedCount: this.completedItemCount,
@@ -214,7 +251,7 @@ export struct CourseDetailPage {
             currentIndex: this.currentItemIndex,
             showHeader: true,
             onItemCodeClick: (itemCode: string, itemName: string, completed: boolean) => {
-              this.onOpenTrainingItem(itemCode, itemName, completed)
+              this.onOpenTrainingItem(itemCode, itemName, false)
             }
           })
 
@@ -512,7 +549,7 @@ export struct CourseDetailPage {
         })
         .borderRadius(16)
         .onClick(() => {
-          this.onOpenTrainingItem(this.getNextItemCode(), this.getNextPhrase(), this.shouldOpenResultForNextPhrase())
+          this.onOpenTrainingItem(this.getNextItemCode(), this.getNextPhrase(), false)
         })
     }
     .width('100%')

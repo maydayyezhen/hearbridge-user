@@ -1,6 +1,6 @@
 import common from '@ohos.app.ability.common'
 import { readToken } from '../api/AuthStorage'
-import { CourseListItemDto, getCourseList } from '../api/CourseApi'
+import { CourseListItemDto, CourseTagDto, getCourseList, getCourseTagList } from '../api/CourseApi'
 import { CourseItem } from './course/CourseModels'
 import { CourseCardList } from './course/components/CourseCardList'
 
@@ -11,7 +11,20 @@ export struct CourseListPage {
   @Prop apiBaseUrl: string = ''
   @Prop trainingType: string = 'gesture'
   @Prop favoriteCourseCodes: string[] = []
+  @Prop initialCourseTags: string[] = []
+  @Prop initialCourses: CourseItem[] = []
+  @Prop initialTotal: number = 0
+  @Prop initialPageNo: number = 1
+  @Prop initialTrainingType: string = 'gesture'
+  @Prop initialDataReady: boolean = false
+  @Prop initialKeyword: string = ''
+  @Prop initialSortType: string = 'default'
+  @Prop initialSelectedTags: string[] = []
   onTrainingTypeChange: (trainingType: string) => void = (_trainingType: string) => {}
+  onFilterStateChange: (keyword: string, sortType: string, selectedTags: string[]) => void = (_keyword: string, _sortType: string,
+    _selectedTags: string[]) => {}
+  onCourseCacheChange: (courses: CourseItem[], total: number, pageNo: number, trainingType: string) => void = (_courses: CourseItem[],
+    _total: number, _pageNo: number, _trainingType: string) => {}
   onToggleCourseFavorite: (courseCode: string) => void = (_courseCode: string) => {}
   onOpenCourse: (courseName: string, courseCode: string, phrase: string, toResult: boolean) => void =
     (_courseName: string, _courseCode: string, _phrase: string, _toResult: boolean) => {}
@@ -19,8 +32,7 @@ export struct CourseListPage {
   @State keyword: string = ''
   @State sortType: SortType = 'default'
   @State selectedTags: string[] = []
-  @State displayTags: string[] = ['\u624b\u52bf', '\u53e3\u8bed']
-  @State extraTags: string[] = []
+  @State courseTags: string[] = []
   @State courses: CourseItem[] = []
   @State loading: boolean = false
   @State loadingMore: boolean = false
@@ -34,8 +46,70 @@ export struct CourseListPage {
   private readonly pageSize: number = 8
 
   aboutToAppear() {
+    this.keyword = this.initialKeyword
+    if (this.initialSortType === 'hot' || this.initialSortType === 'updated' || this.initialSortType === 'default') {
+      this.sortType = this.initialSortType as SortType
+    }
+    const nextSelectedTags: string[] = []
+    for (let i = 0; i < this.initialSelectedTags.length; i += 1) {
+      nextSelectedTags.push(this.initialSelectedTags[i])
+    }
+    this.selectedTags = nextSelectedTags
     this.syncTypeTagFromProp()
-    this.reloadCourses()
+    this.applyPreloadedDataIfNeeded()
+    if (this.courseTags.length === 0) {
+      this.loadCourseTags()
+    }
+    if (!this.applyPreloadedCourseListIfPossible()) {
+      this.reloadCourses()
+    }
+  }
+
+  private applyPreloadedDataIfNeeded() {
+    if (this.courseTags.length === 0 && this.initialCourseTags.length > 0) {
+      const tags: string[] = []
+      for (let i = 0; i < this.initialCourseTags.length; i += 1) {
+        tags.push(this.initialCourseTags[i])
+      }
+      this.courseTags = tags
+    }
+  }
+
+  private applyPreloadedCourseListIfPossible(): boolean {
+    if (!this.initialDataReady) {
+      return false
+    }
+    if (this.normalizeTrainingType(this.trainingType) !== this.normalizeTrainingType(this.initialTrainingType)) {
+      return false
+    }
+
+    const nextCourses: CourseItem[] = []
+    for (let i = 0; i < this.initialCourses.length; i += 1) {
+      nextCourses.push(this.initialCourses[i])
+    }
+    this.courses = nextCourses
+    this.total = this.initialTotal
+    this.pageNo = this.initialPageNo > 0 ? this.initialPageNo : 1
+    this.hasMore = this.courses.length < this.total
+    this.tip = this.courses.length === 0 ? '暂无匹配课程，试试更换筛选条件。' : ''
+    this.syncCourseCache()
+    return true
+  }
+
+  private syncFilterState() {
+    const tags: string[] = []
+    for (let i = 0; i < this.selectedTags.length; i += 1) {
+      tags.push(this.selectedTags[i])
+    }
+    this.onFilterStateChange(this.keyword, this.sortType, tags)
+  }
+
+  private syncCourseCache() {
+    const nextCourses: CourseItem[] = []
+    for (let i = 0; i < this.courses.length; i += 1) {
+      nextCourses.push(this.courses[i])
+    }
+    this.onCourseCacheChange(nextCourses, this.total, this.pageNo, this.trainingType)
   }
 
   private getAbilityContext(): common.BaseContext {
@@ -166,16 +240,12 @@ export struct CourseListPage {
       this.pageNo = Number(result.data.pageNo ?? targetPageNo)
       this.total = Number(result.data.total ?? this.courses.length)
       this.hasMore = this.courses.length < this.total
-      if (loadMore) {
-        this.appendTagPool(result.data.list)
-      } else {
-        this.refreshTagPool(result.data.list)
-      }
       if (this.courses.length === 0) {
         this.tip = '\u6682\u65e0\u5339\u914d\u8bfe\u7a0b\uff0c\u8bd5\u8bd5\u66f4\u6362\u7b5b\u9009\u6761\u4ef6\u3002'
       } else {
         this.tip = ''
       }
+      this.syncCourseCache()
     } catch (_error) {
       if (!loadMore) {
         this.courses = []
@@ -199,6 +269,7 @@ export struct CourseListPage {
     this.hasMore = true
     this.courses = []
     this.tip = ''
+    this.syncFilterState()
     this.loadCourses(false)
   }
 
@@ -258,60 +329,32 @@ export struct CourseListPage {
     return false
   }
 
-  private refreshTagPool(list: CourseListItemDto[]) {
-    const pool: string[] = ['\u624b\u52bf', '\u53e3\u8bed']
+  private mapTagDtos(list: CourseTagDto[]): string[] {
+    const tags: string[] = []
     for (let i = 0; i < list.length; i += 1) {
-      const tags = list[i].tags
-      for (let j = 0; j < tags.length; j += 1) {
-        const tag = tags[j].trim()
-        if (tag.length > 0 && !this.containsTag(pool, tag)) {
-          pool.push(tag)
-        }
+      const name = list[i].name.trim()
+      if (name.length > 0 && !this.containsTag(tags, name)) {
+        tags.push(name)
       }
     }
-
-    this.displayTags = []
-    for (let i = 0; i < pool.length && i < 6; i += 1) {
-      this.displayTags.push(pool[i])
-    }
-    this.extraTags = []
-    for (let i = 6; i < pool.length; i += 1) {
-      this.extraTags.push(pool[i])
-    }
+    return tags
   }
 
-  private appendTagPool(list: CourseListItemDto[]) {
-    const pool: string[] = []
-    for (let i = 0; i < this.displayTags.length; i += 1) {
-      pool.push(this.displayTags[i])
-    }
-    for (let i = 0; i < this.extraTags.length; i += 1) {
-      pool.push(this.extraTags[i])
-    }
-    if (!this.containsTag(pool, '\u624b\u52bf')) {
-      pool.unshift('\u624b\u52bf')
-    }
-    if (!this.containsTag(pool, '\u53e3\u8bed')) {
-      pool.splice(pool.length > 0 ? 1 : 0, 0, '\u53e3\u8bed')
-    }
-
-    for (let i = 0; i < list.length; i += 1) {
-      const tags = list[i].tags
-      for (let j = 0; j < tags.length; j += 1) {
-        const tag = tags[j].trim()
-        if (tag.length > 0 && !this.containsTag(pool, tag)) {
-          pool.push(tag)
-        }
+  private async loadCourseTags() {
+    try {
+      const token = await readToken(this.getAbilityContext())
+      if (token.length === 0) {
+        this.courseTags = []
+        return
       }
-    }
-
-    this.displayTags = []
-    for (let i = 0; i < pool.length && i < 6; i += 1) {
-      this.displayTags.push(pool[i])
-    }
-    this.extraTags = []
-    for (let i = 6; i < pool.length; i += 1) {
-      this.extraTags.push(pool[i])
+      const result = await getCourseTagList(this.apiBaseUrl, token)
+      if (!result.ok || !result.data) {
+        this.courseTags = []
+        return
+      }
+      this.courseTags = this.mapTagDtos(result.data.list)
+    } catch (_error) {
+      this.courseTags = []
     }
   }
 
@@ -328,14 +371,8 @@ export struct CourseListPage {
 
   private getAllScrollableTags(): string[] {
     const tags: string[] = []
-    for (let i = 0; i < this.displayTags.length; i += 1) {
-      const tag = this.displayTags[i]
-      if (!this.isTypeTag(tag) && !this.containsTag(tags, tag)) {
-        tags.push(tag)
-      }
-    }
-    for (let i = 0; i < this.extraTags.length; i += 1) {
-      const tag = this.extraTags[i]
+    for (let i = 0; i < this.courseTags.length; i += 1) {
+      const tag = this.courseTags[i]
       if (!this.isTypeTag(tag) && !this.containsTag(tags, tag)) {
         tags.push(tag)
       }
@@ -361,6 +398,7 @@ export struct CourseListPage {
       next.push(tag)
     }
     this.selectedTags = next
+    this.syncFilterState()
 
     if (this.isTypeTag(tag)) {
       const typeFilter = this.getTrainingTypeFilterForApi()
@@ -381,6 +419,7 @@ export struct CourseListPage {
       return
     }
     this.sortType = sortType
+    this.syncFilterState()
     this.reloadCourses()
   }
 

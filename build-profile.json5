@@ -1,6 +1,20 @@
 {
   "app": {
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\77349\\.ohos\\config\\default_HearBridge-User_OW8dSh5xT2DL4aGpAltxH_QQVNylxbgn7W6-E_NpcDI=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B22E7C9736140DF43B5EB5FFA77FED0A0BC62C4C8A3D866181F4FB4DD674949F6656BC6E040B8F7",
+          "profile": "C:\\Users\\77349\\.ohos\\config\\default_HearBridge-User_OW8dSh5xT2DL4aGpAltxH_QQVNylxbgn7W6-E_NpcDI=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\77349\\.ohos\\config\\default_HearBridge-User_OW8dSh5xT2DL4aGpAltxH_QQVNylxbgn7W6-E_NpcDI=.p12",
+          "storePassword": "0000001BCA1846DB82D29686D998B7CF1CC11B722D78B35C059CAC1CF9233B227FBD5E9E5656B02B5F7A27"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",

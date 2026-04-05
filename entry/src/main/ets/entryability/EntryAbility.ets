@@ -1,6 +1,7 @@
-import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
+import { abilityAccessCtrl, AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 const DOMAIN = 0x0000;
 
@@ -21,6 +22,15 @@ export default class EntryAbility extends UIAbility {
   onWindowStageCreate(windowStage: window.WindowStage): void {
     // Main window is created, set main page for this ability
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
+
+    let atManager = abilityAccessCtrl.createAtManager();
+    atManager.requestPermissionsFromUser(this.context, ['ohos.permission.MICROPHONE'])
+      .then((data) => {
+        hilog.info(DOMAIN, 'testTag', 'permission result: %{public}s', JSON.stringify(data));
+      })
+      .catch((err: BusinessError) => {
+        hilog.error(DOMAIN, 'testTag', 'permission request failed: %{public}s', JSON.stringify(err));
+      });
 
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {

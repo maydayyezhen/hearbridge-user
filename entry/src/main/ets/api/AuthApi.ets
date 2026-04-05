@@ -74,19 +74,21 @@ export interface UserInfoFavorites {
 export interface UserInfoFavoriteCourse {
   courseCode: string
   courseName: string
+  trainingType?: string
 }
 
 export interface UserInfoFavoriteTrainingItem {
   itemId: number
   itemCode: string
   itemName: string
-  courseCode: string
+  courseCode?: string
   courseName: string
+  trainingType?: string
 }
 
 export interface UserInfoRecentCourse {
-  courseCode: string
   courseName: string
+  trainingType: string
   coverUrl: string
   lastLearnAt: string
   progressPercent: number

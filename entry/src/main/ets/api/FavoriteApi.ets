@@ -24,20 +24,28 @@ export interface FavoriteStatusData {
 export class FavoriteCourseSummary {
   courseCode: string
   courseName: string
+  trainingType: string
 
-  constructor(courseCode: string, courseName: string) {
+  constructor(courseCode: string, courseName: string, trainingType: string = '') {
     this.courseCode = courseCode
     this.courseName = courseName
+    this.trainingType = trainingType
   }
 }
 
 export class FavoriteTrainingItemSummary {
   itemCode: string
   itemName: string
+  courseCode: string
+  courseName: string
+  trainingType: string
 
-  constructor(itemCode: string, itemName: string) {
+  constructor(itemCode: string, itemName: string, courseCode: string = '', courseName: string = '', trainingType: string = '') {
     this.itemCode = itemCode
     this.itemName = itemName
+    this.courseCode = courseCode
+    this.courseName = courseName
+    this.trainingType = trainingType
   }
 }
 

@@ -35,6 +35,16 @@ export interface CourseListData {
 
 export interface CourseDetailData extends CourseListItemDto {}
 
+export interface CourseTagDto {
+  id: number
+  name: string
+  sortNum: number
+}
+
+export interface CourseTagListData {
+  list: CourseTagDto[]
+}
+
 export interface CourseListQuery {
   keyword?: string
   trainingType?: string
@@ -146,6 +156,20 @@ export async function getCourseList(baseUrl: string, token: string, query: Cours
 export async function getCourseDetail(baseUrl: string, token: string, courseCode: string): Promise<ApiResult<CourseDetailData>> {
   const requestUrl = `${normalizeBaseUrl(baseUrl)}/app/course/detail/${encodeURIComponent(courseCode)}`
   return requestApi<CourseDetailData>(requestUrl, {
+    method: http.RequestMethod.GET,
+    expectDataType: http.HttpDataType.STRING,
+    usingCache: false,
+    connectTimeout: 10000,
+    readTimeout: 10000,
+    header: {
+      token
+    }
+  }, 'GET', token.length > 0, 'none')
+}
+
+export async function getCourseTagList(baseUrl: string, token: string): Promise<ApiResult<CourseTagListData>> {
+  const requestUrl = `${normalizeBaseUrl(baseUrl)}/app/tag/list`
+  return requestApi<CourseTagListData>(requestUrl, {
     method: http.RequestMethod.GET,
     expectDataType: http.HttpDataType.STRING,
     usingCache: false,

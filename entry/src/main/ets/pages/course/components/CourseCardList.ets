@@ -27,7 +27,7 @@ struct CourseCoverImage {
   }
 
   private getPlaceholderUrl(): string {
-    return `https://placehold.co/400x240/png?text=Course+${this.placeholderIndex}`
+    return `https://placehold.co/400x240/svg?text=Course+${this.placeholderIndex}`
   }
 }
 
