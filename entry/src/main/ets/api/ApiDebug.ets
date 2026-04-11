@@ -1,3 +1,20 @@
+/**
+ * ApiDebug 文件。
+ */
+
+/** API 调试文本写入器。 */
+export type ApiDebugWriter = (text: string) => void
+
+/** 当前注册的 API 调试文本写入器。 */
+let apiDebugWriter: ApiDebugWriter | null = null
+
+/**
+ * 注册 API 调试文本写入器。
+ */
+export function setApiDebugWriter(writer: ApiDebugWriter | null): void {
+  apiDebugWriter = writer
+}
+
 export function stringifyDebugBody(body: Object | string | ArrayBuffer | number | boolean | null | undefined): string {
   if (body === undefined) {
     return 'none'
@@ -17,14 +34,29 @@ export function stringifyDebugBody(body: Object | string | ArrayBuffer | number 
   return JSON.stringify(body)
 }
 
-export function recordApiDebug(moduleName: string, method: string, url: string, hasToken: boolean, requestBody: string,
-  responseBody: string): void {
+/** recordApiDebug。 */
+export function recordApiDebug(
+  method: string,
+  path: string,
+  hasToken: boolean,
+  requestBody: string,
+  responseBody: string,
+  statusCode?: number,
+  costMs?: number
+): void {
   const debugText =
-    `module: ${moduleName}\n` +
-    `method: ${method}\n` +
-    `url: ${url}\n` +
-    `token present: ${hasToken ? 'true' : 'false'}\n` +
-    `request body: ${requestBody}\n` +
+    `[HTTP] ${method} ${path}
+` +
+    `status: ${statusCode !== undefined ? statusCode : 'unknown'}
+` +
+    `cost: ${costMs !== undefined ? `${costMs}ms` : 'unknown'}
+` +
+    `token present: ${hasToken ? 'true' : 'false'}
+` +
+    `request body: ${requestBody}
+` +
     `response: ${responseBody}`
-  AppStorage.setOrCreate('apiDebugText', debugText)
+  if (apiDebugWriter) {
+    apiDebugWriter(debugText)
+  }
 }

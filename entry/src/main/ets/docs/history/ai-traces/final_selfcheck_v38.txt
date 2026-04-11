@@ -1,0 +1,23 @@
+## 结构守卫
+[1] pages 不得直接依赖 local/repository/storage/api
+[2] repository 不得反向依赖 services/pages
+[3] pages 不得手写 go('/xxx') 裸路由
+[4] 业务文件不再手写长构造
+[5] RouteMatcher 不得反向依赖 RouteRegistry
+[6] services/api 不得直接写 AppStorage.setOrCreate
+[7] repository README 不得回退到旧职责说明
+[8] TrainPageService 不得回退为直接解析 routePath
+[9] TrainSessionRuntime 不得混入明显页面展示字段
+[10] api 不得反向依赖 repository/services/pages/storage
+[11] TrainSessionStore 与 CourseSessionStore 不得引入 TrainingTypeUtil
+[12] pages 不得直连 auth/course/record 零散 PageService
+结构守卫检查通过
+
+## 行为冒烟
+行为级 smoke check 通过
+
+## API 反向依赖检查
+
+## Store 归一化残留检查
+
+## 页面直连零散 PageService 检查

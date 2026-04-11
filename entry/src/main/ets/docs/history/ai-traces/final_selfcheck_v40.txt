@@ -1,0 +1,32 @@
+--- guard ---
+[1] TrainPageService 不再直接解析 routePath
+[2] 训练路由解析收口在 TrainPageRouteAdapter
+[3] RouteMatcher 只依赖纯路径模式真源
+[4] requestApi 不再向上抛出普通网络异常
+[5] 训练模块正式出口保持统一
+[6] TrainSessionStore 不得混入课程/结果展示字段
+[7] api 不得反向依赖 repository/services/pages/storage
+[8] TrainSessionStore 与 CourseSessionStore 不得引入 TrainingTypeUtil
+[9] pages 不得直连 auth/course/record 零散 PageService
+[10] 训练链路公共签名不再扩散 Object
+[11] route input 与 bootstrap context 不得回退成裸字符串 stage
+[12] 纯请求 service 不得回流旧式 catch
+[13] 直接承接纯请求 service 的页面不再保留普通网络失败 catch
+[14] 课程与训练项缓存类型不得回退成裸字符串
+[15] EntryAbility 不得主动申请训练专属麦克风权限
+[16] user api service 不得直接读写 token 或处理上传前置
+结构守卫检查通过
+
+--- smoke ---
+行为级 smoke check 通过
+
+--- auth semantic grep ---
+loadUserInfoAfterAuth_has_catch = False
+loadCurrentUserInfo_result_semantics = True
+
+--- user api grep ---
+
+--- remaining loose type grep ---
+domain/static/train/TrainingContentModels.ets:13:  status: string
+domain/static/train/TrainingContentModels.ets:17:  constructor(uid: string, name: string, url: string, status: string, title: string = '', description: string = '') {
+services/course/mapper/CourseApiMapper.ets:13:function mapCourseStatusToNumber(status: string): number {
